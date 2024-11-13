@@ -116,6 +116,8 @@ func Test_queryAttrGroupFromDB(t *testing.T) {
 		wantErrString string
 	}{
 		{"entity id must neq 0", 0, 0, true, "entityId is zero"},
+		{"entity id = 1", 1, 2, false, ""},
+		{"entity id = 911,not exist,return nil", 911, 0, false, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -128,6 +130,9 @@ func Test_queryAttrGroupFromDB(t *testing.T) {
 				assert.Contains(t, err.Error(), tt.wantErrString)
 			}
 			assert.Equal(t, tt.groupSize, len(got))
+			if tt.groupSize == 0 {
+				assert.Nil(t, got)
+			}
 		})
 	}
 }

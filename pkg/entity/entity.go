@@ -143,7 +143,11 @@ func queryAttrGroupFromDB(entityId uint32, engine *xorm.Engine) ([]*AttrGroup, e
 	if entityId == 0 {
 		return nil, fmt.Errorf("entityId is zero")
 	}
-	return nil, fmt.Errorf("not impl")
+	g := &AttrGroup{EntityIdx: entityId}
+	var r []*AttrGroup
+	err := engine.Find(&r, g)
+	return r, err
+	// return nil, fmt.Errorf("not impl")
 }
 
 func attachSchemaToMeta(meta *Meta, tables map[string]*schemas.Table) error {
