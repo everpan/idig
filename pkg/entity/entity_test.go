@@ -49,6 +49,9 @@ func createSeedData() {
 	engine.Insert(g1)
 	g2 := &AttrGroup{EntityIdx: e1.EntityIdx, AttrTable: "user_department"}
 	engine.Insert(g2)
+	// disabled entity
+	e2 := &Entity{EntityName: "user01", PkAttrTable: "user01", PkAttrField: "user_idx", Status: 0}
+	engine.Insert(e2)
 }
 
 func TestSerialMeta(t *testing.T) {
@@ -87,6 +90,7 @@ func Test_queryEntityFromDB(t *testing.T) {
 		{"empty", "test", nil, false},
 		{"exist", "user",
 			userEntity, false},
+		{"return nil when status neq 1", "user01", nil, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
