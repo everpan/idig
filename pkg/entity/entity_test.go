@@ -23,11 +23,32 @@ func TestMain(m *testing.M) {
 	defer engine.Close()
 	InitTable(engine)
 	fmt.Println("entity TestMain is running")
+	createSeedData()
 	m.Run()
 }
 
 func createSeedData() {
+	type User struct {
+		UserIdx uint32 `xorm:"pk autoincr"`
+		Name    string
+	}
+	engine.Sync2(new(User))
+	type UserDepartment struct {
+		UserIdx  uint32 `xorm:"pk"`
+		DeptName string
+	}
+	engine.Sync2(new(UserDepartment))
 
+	e1 := &Entity{EntityName: "user", PkAttrTable: "user", PkAttrField: "user_idx", Status: 1}
+	_, err := engine.Insert(e1)
+	if err != nil {
+		panic(err)
+	}
+	g1 := &AttrGroup{EntityIdx: e1.EntityIdx,
+		AttrTable: "user", GroupName: "User base"}
+	engine.Insert(g1)
+	g2 := &AttrGroup{EntityIdx: e1.EntityIdx, AttrTable: "user_department"}
+	engine.Insert(g2)
 }
 
 func TestSerialMeta(t *testing.T) {
@@ -54,6 +75,9 @@ func TestSerialMeta(t *testing.T) {
 }
 
 func Test_queryEntityFromDB(t *testing.T) {
+	userEntity := &Entity{1,
+		"user", "", "user",
+		"user_idx", 1}
 	tests := []struct {
 		name       string
 		entityName string
@@ -61,6 +85,8 @@ func Test_queryEntityFromDB(t *testing.T) {
 		wantErr    bool
 	}{
 		{"empty", "test", nil, false},
+		{"exist", "user",
+			userEntity, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

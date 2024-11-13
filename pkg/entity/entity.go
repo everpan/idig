@@ -128,7 +128,15 @@ func GetMetaFromDB(entityName string, engine *xorm.Engine) (*Meta, error) {
 }
 
 func queryEntityFromDB(entityName string, engine *xorm.Engine) (*Entity, error) {
-	return nil, fmt.Errorf("not impl")
+	e := &Entity{
+		EntityName: entityName,
+		Status:     1,
+	}
+	ok, err := engine.Get(e)
+	if ok {
+		return e, nil
+	}
+	return nil, err
 }
 
 func queryAttrGroupFromDB(entityId uint32, engine *xorm.Engine) ([]*AttrGroup, error) {
