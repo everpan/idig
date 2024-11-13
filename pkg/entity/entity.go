@@ -140,6 +140,9 @@ func queryEntityFromDB(entityName string, engine *xorm.Engine) (*Entity, error) 
 }
 
 func queryAttrGroupFromDB(entityId uint32, engine *xorm.Engine) ([]*AttrGroup, error) {
+	if entityId == 0 {
+		return nil, fmt.Errorf("entityId is zero")
+	}
 	return nil, fmt.Errorf("not impl")
 }
 

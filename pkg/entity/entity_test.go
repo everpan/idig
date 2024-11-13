@@ -3,6 +3,7 @@ package entity
 import (
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/stretchr/testify/assert"
 	"os"
 	"reflect"
 	"testing"
@@ -102,6 +103,31 @@ func Test_queryEntityFromDB(t *testing.T) {
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("queryEntityFromDB() got = %v, want %v", got, tt.want)
 			}
+		})
+	}
+}
+
+func Test_queryAttrGroupFromDB(t *testing.T) {
+	tests := []struct {
+		name          string
+		entityId      uint32
+		groupSize     int
+		wantErr       bool
+		wantErrString string
+	}{
+		{"entity id must neq 0", 0, 0, true, "entityId is zero"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := queryAttrGroupFromDB(tt.entityId, engine)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("queryAttrGroupFromDB() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if err != nil {
+				assert.Contains(t, err.Error(), tt.wantErrString)
+			}
+			assert.Equal(t, tt.groupSize, len(got))
 		})
 	}
 }
