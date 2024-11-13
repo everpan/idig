@@ -3,28 +3,28 @@ package entity
 import (
 	"crypto/md5"
 	"fmt"
+	"github.com/everpan/idig/pkg/config"
 	"github.com/goccy/go-json"
-	"idig/pkg/config"
 	"sync"
 	"xorm.io/xorm"
 	"xorm.io/xorm/schemas"
 )
 
 type Entity struct {
-	Idx         uint32 `xorm:"pk autoincr"`
+	EntityIdx   uint32 `xorm:"pk autoincr"`
 	EntityName  string `xorm:"unique"`
 	Description string
 	PkAttrTable string
-	PKAttrField string
-	Status      int
+	PkAttrField string
+	Status      int // 1-normal 2-del,name is updated to {name-del},because is unique
 }
 
 type AttrGroup struct {
-	Idx         uint32 `xorm:"pk autoincr"`
-	GroupName   string `xorm:"unique"`
+	GroupIdx    uint32 `xorm:"pk autoincr"`
+	EntityIdx   uint32
+	AttrTable   string `xorm:"unique"` // must real table in db
+	GroupName   string `xorm:"index"`
 	Description string
-	AttrTable   string
-	Status      int
 }
 
 type Meta struct {
@@ -33,8 +33,22 @@ type Meta struct {
 	AttrTables map[string]*schemas.Table
 }
 
+func (e *Entity) TableName() string {
+	return "idig_entity"
+}
+func (a *AttrGroup) TableName() string {
+	return "idig_entity_attr_group"
+}
+
 func InitTable(engine *xorm.Engine) error {
-	var err error
+	err := engine.Sync2(new(Entity))
+	if err != nil {
+		return err
+	}
+	err = engine.Sync2(new(AttrGroup))
+	if err != nil {
+		return err
+	}
 	return err
 }
 
@@ -89,7 +103,7 @@ func GetMetaFromDB(entityName string, engine *xorm.Engine) (*Meta, error) {
 	if err != nil {
 		return nil, err
 	}
-	a, err := queryAttrGroupFromDB(e.Idx, engine)
+	a, err := queryAttrGroupFromDB(e.EntityIdx, engine)
 	if err != nil {
 		return nil, err
 	}
@@ -114,13 +128,13 @@ func GetMetaFromDB(entityName string, engine *xorm.Engine) (*Meta, error) {
 }
 
 func queryEntityFromDB(entityName string, engine *xorm.Engine) (*Entity, error) {
-	return nil, nil
+	return nil, fmt.Errorf("not impl")
 }
 
 func queryAttrGroupFromDB(entityId uint32, engine *xorm.Engine) ([]*AttrGroup, error) {
-	return nil, nil
+	return nil, fmt.Errorf("not impl")
 }
 
 func attachSchemaToMeta(meta *Meta, tables map[string]*schemas.Table) error {
-	return nil
+	return fmt.Errorf("not impl")
 }

@@ -6,12 +6,13 @@ require (
 	github.com/goccy/go-json v0.8.1
 	github.com/gofiber/contrib/fiberzap/v2 v2.1.4
 	github.com/gofiber/fiber/v2 v2.52.5
+	github.com/mattn/go-sqlite3 v1.14.16
 	go.uber.org/zap v1.27.0
 	xorm.io/xorm v1.3.9
 )
 
 require (
-	github.com/andybalholm/brotli v1.1.0 // indirect
+	github.com/andybalholm/brotli v1.1.1 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
