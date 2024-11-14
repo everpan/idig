@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"encoding/json"
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
@@ -179,6 +180,29 @@ func Test_attachSchemaToMeta(t *testing.T) {
 				return
 			}
 			assert.Equal(t, len(meta.AttrGroups), len(meta.AttrTables))
+		})
+	}
+}
+
+func TestGetMetaFromDB(t *testing.T) {
+	tests := []struct {
+		name            string
+		entityName      string
+		metaJsonContain string
+	}{
+		{"not exist entity", "not-exist", "entity `not-exist` not found"},
+		{"normal", "user", `"attr_groups":[{"group_idx":1`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GetMetaFromDB(tt.entityName, engine)
+			if err != nil {
+				assert.Contains(t, err.Error(), tt.metaJsonContain)
+			} else {
+				assert.NotNil(t, got)
+				jd, _ := json.Marshal(got)
+				assert.Contains(t, string(jd), tt.metaJsonContain)
+			}
 		})
 	}
 }

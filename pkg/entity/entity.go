@@ -11,26 +11,26 @@ import (
 )
 
 type Entity struct {
-	EntityIdx   uint32 `xorm:"pk autoincr"`
+	EntityIdx   uint32 `json:"entity_idx" xorm:"pk autoincr"`
 	EntityName  string `xorm:"unique"`
-	Description string
-	PkAttrTable string
-	PkAttrField string
-	Status      int // 1-normal 2-del,name is updated to {name-del},because is unique
+	Description string `json:"desc" xorm:"desc"`
+	PkAttrTable string `json:"pk_attr_table"`
+	PkAttrField string `json:"pk_attr_field"`
+	Status      int    `json:"status"` // 1-normal 2-del,name is updated to {name-del},because is unique
 }
 
 type AttrGroup struct {
-	GroupIdx    uint32 `xorm:"pk autoincr"`
-	EntityIdx   uint32
-	AttrTable   string `xorm:"unique"` // must real table in db
-	GroupName   string `xorm:"index"`
-	Description string
+	GroupIdx    uint32 `json:"group_idx" xorm:"pk autoincr"`
+	EntityIdx   uint32 `json:"entity_idx" xorm:"index"`
+	AttrTable   string `json:"attr_table" xorm:"unique"` // must real table in db
+	GroupName   string `json:"group_name" xorm:"index"`
+	Description string `json:"desc" xorm:"desc"`
 }
 
 type Meta struct {
-	Entity     *Entity
-	AttrGroups []*AttrGroup
-	AttrTables map[string]*schemas.Table
+	Entity     *Entity                   `json:"entity"`
+	AttrGroups []*AttrGroup              `json:"attr_groups"`
+	AttrTables map[string]*schemas.Table `json:"attr_tables"`
 }
 
 func (e *Entity) TableName() string {
@@ -102,6 +102,9 @@ func GetMetaFromDB(entityName string, engine *xorm.Engine) (*Meta, error) {
 	e, err := queryEntityFromDB(entityName, engine)
 	if err != nil {
 		return nil, err
+	}
+	if e == nil {
+		return nil, fmt.Errorf("entity `%s` not found", entityName)
 	}
 	a, err := queryAttrGroupFromDB(e.EntityIdx, engine)
 	if err != nil {
