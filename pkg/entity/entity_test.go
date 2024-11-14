@@ -201,6 +201,7 @@ func TestGetMetaFromDB(t *testing.T) {
 			} else {
 				assert.NotNil(t, got)
 				jd, _ := json.Marshal(got)
+				t.Log(string(jd))
 				assert.Contains(t, string(jd), tt.metaJsonContain)
 				// 查询成功并已经缓存
 				got2 := GetMetaFromCache(tt.entityName)

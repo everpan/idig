@@ -12,7 +12,7 @@ import (
 
 type Entity struct {
 	EntityIdx   uint32 `json:"entity_idx" xorm:"pk autoincr"`
-	EntityName  string `xorm:"unique"`
+	EntityName  string `json:"entity_name" xorm:"unique"`
 	Description string `json:"desc" xorm:"desc"`
 	PkAttrTable string `json:"pk_attr_table"`
 	PkAttrField string `json:"pk_attr_field"`
@@ -21,7 +21,7 @@ type Entity struct {
 
 type AttrGroup struct {
 	GroupIdx    uint32 `json:"group_idx" xorm:"pk autoincr"`
-	EntityIdx   uint32 `json:"entity_idx" xorm:"index"`
+	EntityIdx   uint32 `json:"-" xorm:"index"`
 	AttrTable   string `json:"attr_table" xorm:"unique"` // must real table in db
 	GroupName   string `json:"group_name" xorm:"index"`
 	Description string `json:"desc" xorm:"desc"`
@@ -169,5 +169,35 @@ func attachSchemaToMeta(meta *Meta, tables map[string]*schemas.Table) error {
 		attrTable[g.AttrTable] = gt
 	}
 	meta.AttrTables = attrTable
+	return nil
+}
+
+type XX struct {
+}
+
+func (meta *Meta) Verify() error {
+	var errs []error
+	if meta.Entity == nil {
+		errs = append(errs, fmt.Errorf("entity is nil"))
+	}
+	if meta.AttrGroups == nil {
+		errs = append(errs, fmt.Errorf("attr_groups is nil"))
+	}
+	if meta.AttrTables == nil {
+		errs = append(errs, fmt.Errorf("attr_tables is nil"))
+	}
+	if meta.AttrGroups != nil && meta.AttrTables != nil {
+		if len(meta.AttrGroups) == 0 {
+			errs = append(errs, fmt.Errorf("attr_groups is empty"))
+		}
+		if len(meta.AttrTables) == 0 {
+			errs = append(errs, fmt.Errorf("attr_tables is empty"))
+		} else if len(meta.AttrGroups) != len(meta.AttrTables) {
+			errs = append(errs, fmt.Errorf("length of attr_groups and attr_tables is not equal"))
+		}
+	}
+	if len(errs) != 0 {
+		return fmt.Errorf("%v", errs)
+	}
 	return nil
 }

@@ -1,10 +1,24 @@
 package core
 
-import "xorm.io/xorm"
+import (
+	"github.com/gofiber/fiber/v2"
+	"xorm.io/xorm"
+)
 
 type Context struct {
+	fb     *fiber.Ctx
 	engine *xorm.Engine
+	tenant *Tenant
 }
 
-type Query interface {
+var (
+	TenantHeader = "X-Tenant-Uid"
+)
+
+type IDigHandleFunc func(c *Context) error
+
+func (c *Context) FromFiber(fb *fiber.Ctx) {
+	c.fb = fb
+	// tenantUid := fb.Get("X-Tenant-Uid","")
+
 }
