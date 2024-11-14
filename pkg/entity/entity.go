@@ -147,9 +147,24 @@ func queryAttrGroupFromDB(entityId uint32, engine *xorm.Engine) ([]*AttrGroup, e
 	var r []*AttrGroup
 	err := engine.Find(&r, g)
 	return r, err
-	// return nil, fmt.Errorf("not impl")
 }
 
 func attachSchemaToMeta(meta *Meta, tables map[string]*schemas.Table) error {
-	return fmt.Errorf("not impl")
+	gs := meta.AttrGroups
+	if gs == nil || len(gs) == 0 {
+		return fmt.Errorf("no attr groups")
+	}
+	if tables == nil || len(tables) == 0 {
+		return fmt.Errorf("no attr tables")
+	}
+	attrTable := make(map[string]*schemas.Table)
+	for _, g := range gs {
+		gt, ok := tables[g.AttrTable]
+		if !ok {
+			return fmt.Errorf("attr table '%s' for entry '%s' not found", g.AttrTable, meta.Entity.EntityName)
+		}
+		attrTable[g.AttrTable] = gt
+	}
+	meta.AttrTables = attrTable
+	return nil
 }

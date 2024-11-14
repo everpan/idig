@@ -8,12 +8,16 @@ import (
 	"reflect"
 	"testing"
 	"xorm.io/xorm"
+	"xorm.io/xorm/schemas"
 )
 
-var engine *xorm.Engine
+var (
+	engine *xorm.Engine
+	meta   *Meta
+)
 
 func TestMain(m *testing.M) {
-	dbFile := "./entity_test.db"
+	dbFile := "/tmp/entity_test.db"
 	os.Remove(dbFile)
 	var err error
 	engine, err = xorm.NewEngine("sqlite3", dbFile)
@@ -21,11 +25,15 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	engine.ShowSQL(true)
-	defer engine.Close()
+
 	InitTable(engine)
 	fmt.Println("entity TestMain is running")
 	createSeedData()
-	m.Run()
+	if m.Run() == 0 {
+		engine.Close()
+		os.Remove(dbFile)
+	}
+	defer engine.Close()
 }
 
 func createSeedData() {
@@ -53,6 +61,12 @@ func createSeedData() {
 	// disabled entity
 	e2 := &Entity{EntityName: "user01", PkAttrTable: "user01", PkAttrField: "user_idx", Status: 0}
 	engine.Insert(e2)
+
+	// meta
+	meta = &Meta{
+		Entity:     e1,
+		AttrGroups: []*AttrGroup{g1, g2},
+	}
 }
 
 func TestSerialMeta(t *testing.T) {
@@ -133,6 +147,38 @@ func Test_queryAttrGroupFromDB(t *testing.T) {
 			if tt.groupSize == 0 {
 				assert.Nil(t, got)
 			}
+		})
+	}
+}
+
+func Test_attachSchemaToMeta(t *testing.T) {
+	metaWithNotExistGroup := &Meta{
+		Entity:     meta.Entity,
+		AttrGroups: []*AttrGroup{&AttrGroup{AttrTable: "not_exist_table"}},
+	}
+	TableSchemasCache(engine)
+	tables := dsTableCache[DataSourceNameMd5(engine.DataSourceName())]
+	tests := []struct {
+		name          string
+		meta          *Meta
+		tables        map[string]*schemas.Table
+		wantErr       bool
+		wantErrString string
+	}{
+		{"no attr groups", &Meta{}, nil, true, "no attr groups"},
+		{"no attr tables", meta, nil, true, "no attr tables"},
+		{"no attr tables", meta, dsTableCache["empty"], true, "no attr tables"},
+		{"normal", meta, tables, false, ""},
+		{"some attr tables not found", metaWithNotExistGroup, tables, true, "attr table 'not_exist_table' for entry 'user' not found"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := attachSchemaToMeta(tt.meta, tt.tables)
+			if tt.wantErr {
+				assert.Contains(t, err.Error(), tt.wantErrString)
+				return
+			}
+			assert.Equal(t, len(meta.AttrGroups), len(meta.AttrTables))
 		})
 	}
 }
