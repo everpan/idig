@@ -98,7 +98,7 @@ func GetMetaFromCache(entityName string) *Meta {
 	return meta
 }
 
-func GetMetaFromDB(entityName string, engine *xorm.Engine) (*Meta, error) {
+func GetMetaFromDBAndCached(entityName string, engine *xorm.Engine) (*Meta, error) {
 	e, err := queryEntityFromDB(entityName, engine)
 	if err != nil {
 		return nil, err
@@ -117,7 +117,7 @@ func GetMetaFromDB(entityName string, engine *xorm.Engine) (*Meta, error) {
 	key := DataSourceNameMd5(engine.DataSourceName())
 	tables, ok := dsTableCache[key]
 	if !ok {
-		TableSchemasCache(engine)
+		_ = TableSchemasCache(engine)
 		tables = dsTableCache[key]
 	}
 	err = attachSchemaToMeta(meta, tables)

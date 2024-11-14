@@ -195,13 +195,17 @@ func TestGetMetaFromDB(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := GetMetaFromDB(tt.entityName, engine)
+			got, err := GetMetaFromDBAndCached(tt.entityName, engine)
 			if err != nil {
 				assert.Contains(t, err.Error(), tt.metaJsonContain)
 			} else {
 				assert.NotNil(t, got)
 				jd, _ := json.Marshal(got)
 				assert.Contains(t, string(jd), tt.metaJsonContain)
+				// 查询成功并已经缓存
+				got2 := GetMetaFromCache(tt.entityName)
+				assert.NotNil(t, got2)
+				assert.Equal(t, got, got2)
 			}
 		})
 	}
