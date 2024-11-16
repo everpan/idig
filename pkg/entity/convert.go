@@ -14,7 +14,7 @@ func (attr *Attr) fromColumn(attrTable string, col *schemas.Column) {
 	attr.AttrTable = attrTable
 }
 
-func (meta *Meta) toJMeta() *JMeta {
+func (meta *Meta) ToJMeta() *JMeta {
 	mj := &JMeta{
 		Entity:      meta.Entity.EntityName,
 		EntryInfo:   meta.Entity,
@@ -32,6 +32,6 @@ func (meta *Meta) toJMeta() *JMeta {
 }
 
 func (meta *Meta) Marshal() ([]byte, error) {
-	jm := meta.toJMeta()
+	jm := meta.ToJMeta()
 	return json.Marshal(jm)
 }

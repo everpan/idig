@@ -19,6 +19,10 @@ type Tenant struct {
 	Status      int    `json:"status"`
 }
 
+func (t *Tenant) TableName() string {
+	return "idig_tenant"
+}
+
 func InitTable(engine *xorm.Engine) error {
 	err := engine.Sync2(new(Tenant))
 	if err != nil {

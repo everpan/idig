@@ -32,9 +32,5 @@ func getMeta(c *config.Context) error {
 			return c.SendBadRequestError(err)
 		}
 	}
-	data, err := meta.Marshal()
-	if err != nil {
-		return c.SendBadRequestError(err)
-	}
-	return c.SendSuccess(data)
+	return c.SendSuccess(meta.ToJMeta())
 }

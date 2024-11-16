@@ -36,6 +36,7 @@ type Meta struct {
 func (e *Entity) TableName() string {
 	return "idig_entity"
 }
+
 func (a *AttrGroup) TableName() string {
 	return "idig_entity_attr_group"
 }
@@ -49,6 +50,22 @@ func InitTable(engine *xorm.Engine) error {
 	if err != nil {
 		return err
 	}
+	tenant := &Entity{
+		EntityIdx:   0,
+		EntityName:  "tenant",
+		Description: "租户信息",
+		PkAttrTable: (&Entity{}).TableName(),
+		PkAttrField: "tenant_id",
+		Status:      1,
+	}
+	engine.Insert(tenant)
+	tenantGroup := &AttrGroup{
+		GroupIdx:  0,
+		EntityIdx: tenant.EntityIdx,
+		AttrTable: tenant.TableName(),
+		GroupName: "tenant",
+	}
+	engine.Insert(tenantGroup)
 	return err
 }
 
@@ -155,10 +172,10 @@ func queryAttrGroupFromDB(entityId uint32, engine *xorm.Engine) ([]*AttrGroup, e
 func attachSchemaToMeta(meta *Meta, tables map[string]*schemas.Table) error {
 	gs := meta.AttrGroups
 	if gs == nil || len(gs) == 0 {
-		return fmt.Errorf("no attr groups")
+		return fmt.Errorf("entity:'%s' has no attr groups", meta.Entity.EntityName)
 	}
 	if tables == nil || len(tables) == 0 {
-		return fmt.Errorf("no attr tables")
+		return fmt.Errorf("entity:'%s' has no attr tables", meta.Entity.EntityName)
 	}
 	attrTable := make(map[string]*schemas.Table)
 	for _, g := range gs {

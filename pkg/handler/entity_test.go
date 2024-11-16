@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"github.com/everpan/idig/pkg/config"
 	"github.com/everpan/idig/pkg/core"
+	"github.com/everpan/idig/pkg/entity"
 	"github.com/stretchr/testify/assert"
 	"io"
 	"net/http"
@@ -11,23 +13,34 @@ import (
 
 func Test_getMeta(t *testing.T) {
 	app := core.CreateApp()
-
+	noAttEntity := &entity.Entity{
+		EntityName:  "not-attr-entity",
+		PkAttrTable: "not-attr-entity",
+		PkAttrField: "not-attr-entity",
+		Status:      1,
+	}
+	engine, _ := config.GetEngine(config.DefaultTenant.Driver, config.DefaultTenant.DataSource)
+	engine.Insert(noAttEntity)
 	tests := []struct {
 		name     string
 		entity   string
 		wantCode int
 		wantStr  string
 	}{
-		{"fetch_not_exist", "not-exist", 400, `{"code":-1,"msg":"entity 'fetch_not_exist' not found"}`},
+		{"fetch_not_exist", "not-exist", 400,
+			`{"code":-1,"msg":"entity 'fetch_not_exist' not found"}`},
+		{"not-attr-entity", "not-attr-entity", 200, "has no attr groups"},
+		{"tenant", "tenant", 0, `"primary_keys":["entity_idx"]`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/api/v1/entity/meta/"+tt.name, nil)
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/entity/meta/"+tt.entity, nil)
 			resp, err := app.Test(req, -1)
 			assert.NoError(t, err)
-			_, err = io.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
 			assert.NoError(t, err)
-			// t.Logf(string(body))
+			assert.Contains(t, string(body), tt.wantStr)
+			t.Log(string(body))
 		})
 	}
 }
