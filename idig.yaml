@@ -1,0 +1,4 @@
+tenant:
+    default:
+        data-source: /tmp/tenant_test.db
+        driver: sqlite3

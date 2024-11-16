@@ -20,21 +20,21 @@ func init() {
 }
 
 func getMeta(c *config.Context) error {
-	e := c.Fiber().Params("entity")
-	if e == "" {
+	eName := c.Fiber().Params("entity")
+	if eName == "" {
 		c.SendBadRequestError(fmt.Errorf("no entity specified"))
 	}
-	meta := entity.GetMetaFromCache(e)
+	meta := entity.GetMetaFromCache(eName)
 	var err error
 	if meta == nil {
-		meta, err = entity.GetMetaFromDBAndCached(e, c.Engine())
+		meta, err = entity.GetMetaFromDBAndCached(eName, c.Engine())
 		if err != nil {
-			c.SendBadRequestError(err)
+			return c.SendBadRequestError(err)
 		}
 	}
 	data, err := meta.Marshal()
 	if err != nil {
-		c.SendBadRequestError(err)
+		return c.SendBadRequestError(err)
 	}
 	return c.SendSuccess(data)
 }

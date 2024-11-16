@@ -13,8 +13,7 @@ type Context struct {
 }
 
 var (
-	TenantHeader = "X-Tenant-Uid"
-	ctxPool      = sync.Pool{New: func() interface{} { return &Context{} }}
+	ctxPool = sync.Pool{New: func() interface{} { return &Context{} }}
 )
 
 type IDigRoute struct {
@@ -41,16 +40,27 @@ func (c *Context) Fiber() *fiber.Ctx {
 func (c *Context) Engine() *xorm.Engine {
 	return c.engine
 }
-func (c *Context) FromFiber(fb *fiber.Ctx) {
-	c.fb = fb
-	// tenantUid := fb.Get("X-Tenant-Uid","")
 
+func (c *Context) FromFiber(fb *fiber.Ctx) error {
+	c.fb = fb
+	tenantUid := fb.Get(TenantHeader, DefaultTenant.TenantUid)
+	c.tenant = GetFromCache(tenantUid)
+	var err error
+	if c.tenant == nil {
+		c.engine, err = GetEngine(DefaultTenant.Driver, DefaultTenant.DataSource)
+	} else {
+		c.engine, err = GetEngine(c.tenant.Driver, c.tenant.DataSource)
+	}
+	return err
 }
 
-func Wrap(fb *fiber.Ctx, handler IDigHandleFunc) error {
+func IDigHandlerExec(fb *fiber.Ctx, handler IDigHandleFunc) error {
 	c := AcquireContext()
 	defer ReleaseContext(c)
-	c.FromFiber(fb)
+	err := c.FromFiber(fb)
+	if err != nil {
+		return err
+	}
 	return handler(c)
 }
 

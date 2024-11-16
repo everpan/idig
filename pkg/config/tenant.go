@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"github.com/spf13/viper"
+	"sync"
 	"xorm.io/xorm"
 )
 
@@ -14,6 +16,7 @@ type Tenant struct {
 	DataSource  string `json:"data_source"`
 	ExtendInfo  string `json:"extend_info"`
 	Environment string `json:"environment"` // host test normal
+	Status      int    `json:"status"`
 }
 
 func InitTable(engine *xorm.Engine) error {
@@ -27,35 +30,59 @@ func InitTable(engine *xorm.Engine) error {
 
 func init() {
 	RegisterInitTableFunction(InitTable)
+	viper.SetDefault("tenant.default.driver", DefaultTenant.Driver)
+	viper.SetDefault("tenant.default.data-source", DefaultTenant.DataSource)
+	viper.SetDefault("tenant.http-header-key", TenantHeader)
+	RegisterReloadConfigFunc(ReloadTenantConfig)
 }
 
-var DefaultTenant = &Tenant{
-	TenantId:   1,
-	TenantUid:  "69515562-5192-49aa-b223-b0953d83c887",
-	Name:       "default",
-	CnName:     "默认租户",
-	Driver:     "sqlite3",
-	DataSource: "/tmp/tenant_test.db",
-	ExtendInfo: "test",
+func ReloadTenantConfig() error {
+	DefaultTenant.Driver = viper.GetString("tenant.default.driver")
+	DefaultTenant.DataSource = viper.GetString("tenant.default.data-source")
+	TenantHeader = viper.GetString("tenant.http-header-key")
+	tenantCache.Store(DefaultTenant.TenantUid, DefaultTenant)
+	return nil
 }
+
+var (
+	DefaultTenant = &Tenant{
+		TenantId:   1,
+		TenantUid:  "69515562-5192-49aa-b223-b0953d83c887",
+		Name:       "default",
+		CnName:     "默认租户",
+		Driver:     "sqlite3",
+		DataSource: "/tmp/tenant_test.db",
+		Status:     1,
+	}
+	TenantHeader = "X-Tenant-UID"
+	tenantCache  = sync.Map{}
+)
 
 func (t *Tenant) CreateEngine() (*xorm.Engine, error) {
 	return xorm.NewEngine(t.Driver, t.DataSource)
 }
 
-func Get(uid string, engine *xorm.Engine) (*Tenant, error) {
+func GetFromCache(uid string) *Tenant {
+	if v, ok := tenantCache.Load(uid); ok {
+		return v.(*Tenant)
+	}
+	return nil
+}
+
+func GetFromDBThenCached(uid string, engine *xorm.Engine) (*Tenant, error) {
 	if engine == nil {
 		return DefaultTenant, nil
 	}
 	t := &Tenant{
-		TenantUid: uid,
+		TenantUid: uid, Status: 1,
 	}
 	has, err := engine.Get(t)
 	if err != nil {
 		return nil, err
 	}
 	if !has {
-		return nil, fmt.Errorf("tenant:%s not exist", uid)
+		return nil, fmt.Errorf("tenant:%s not exist or status != 1", uid)
 	}
+	tenantCache.Store(uid, t)
 	return t, nil
 }

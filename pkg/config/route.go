@@ -20,11 +20,11 @@ func apply(router fiber.Router, routes []*IDigRoute) {
 		} else {
 			if len(route.Method) > 0 {
 				router.Add(route.Method, route.Path, func(c *fiber.Ctx) error {
-					return Wrap(c, route.Handler)
+					return IDigHandlerExec(c, route.Handler)
 				})
 			} else {
 				router.Group(route.Path, func(c *fiber.Ctx) error {
-					return Wrap(c, route.Handler)
+					return IDigHandlerExec(c, route.Handler)
 				})
 			}
 		}

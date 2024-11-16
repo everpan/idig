@@ -104,7 +104,7 @@ func GetMetaFromDBAndCached(entityName string, engine *xorm.Engine) (*Meta, erro
 		return nil, err
 	}
 	if e == nil {
-		return nil, fmt.Errorf("entity `%s` not found", entityName)
+		return nil, fmt.Errorf("entity '%s' not found", entityName)
 	}
 	a, err := queryAttrGroupFromDB(e.EntityIdx, engine)
 	if err != nil {
