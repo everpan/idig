@@ -1,15 +1,20 @@
 # 实体场景描述
 
+# 元数据操作
+
 ## 查询meta
+
 作为一个用户，必须了解实体及实体属性
 便于观察实体信息相关的属性
 需要进行实体相关的信息查询
 例如：
 GET /xpath/entity/meta/{entity_name}
+
 ```json5
 {
   "entity": "user",
-  "attrs": [ // 属性
+  "attrs": [
+    // 属性
     {
       "name": "user_idx",
       "type": "integer",
@@ -58,7 +63,15 @@ GET /xpath/entity/meta/{entity_name}
   ]
 }
 ```
+
 ## 查询数据
+
+GET /xpath/api/v1/entity/{entityName}
+
+相当于 select * from xxx limit 0,20
+
+POST /xpath/api/v1/entity/
+
 ```json5
 {
   query: [

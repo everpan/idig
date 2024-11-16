@@ -1,14 +1,11 @@
 package main
 
 import (
-	"github.com/everpan/idig/pkg/config"
-	"github.com/gofiber/contrib/fiberzap/v2"
-	"github.com/gofiber/fiber/v2"
+	"github.com/everpan/idig/pkg/core"
+	_ "github.com/everpan/idig/pkg/handler"
 )
 
 func main() {
-	app := fiber.New()
-	logger := config.GetLogger()
-	app.Use(fiberzap.New(fiberzap.Config{Logger: logger}))
+	app := core.CreateApp()
 	app.Listen(":9090")
 }
