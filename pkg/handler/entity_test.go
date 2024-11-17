@@ -28,9 +28,9 @@ func Test_getMeta(t *testing.T) {
 		wantStr  string
 	}{
 		{"fetch_not_exist", "not-exist", 400,
-			`{"code":-1,"msg":"entity 'fetch_not_exist' not found"}`},
-		{"not-attr-entity", "not-attr-entity", 200, "has no attr groups"},
-		{"tenant", "tenant", 0, `"primary_keys":["entity_idx"]`},
+			`{"code":-1,"msg":"entity 'not-exist' not found"}`},
+		{"not-attr-entity", "not-attr-entity", 400, "entry 'not-attr-entity' not found"},
+		{"tenant", "tenant", 200, `"primary_keys":["entity_idx"]`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -39,6 +39,7 @@ func Test_getMeta(t *testing.T) {
 			assert.NoError(t, err)
 			body, err := io.ReadAll(resp.Body)
 			assert.NoError(t, err)
+			assert.Equal(t, tt.wantCode, resp.StatusCode)
 			assert.Contains(t, string(body), tt.wantStr)
 			t.Log(string(body))
 		})

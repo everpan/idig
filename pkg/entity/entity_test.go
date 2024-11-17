@@ -27,7 +27,7 @@ func TestMain(m *testing.M) {
 	}
 	engine.ShowSQL(true)
 
-	InitTable(engine)
+	InitEntityTable(engine)
 	fmt.Println("entity TestMain is running")
 	createSeedData()
 	if m.Run() == 0 {
@@ -94,7 +94,7 @@ func TestSerialMeta(t *testing.T) {
 }
 
 func Test_queryEntityFromDB(t *testing.T) {
-	userEntity := &Entity{1,
+	userEntity := &Entity{2,
 		"user", "", "user",
 		"user_idx", 1}
 	tests := []struct {
@@ -131,7 +131,7 @@ func Test_queryAttrGroupFromDB(t *testing.T) {
 		wantErrString string
 	}{
 		{"entity id must neq 0", 0, 0, true, "entityId is zero"},
-		{"entity id = 1", 1, 2, false, ""},
+		{"entity id = 1", 2, 2, false, ""},
 		{"entity id = 911,not exist,return nil", 911, 0, false, ""},
 	}
 	for _, tt := range tests {
@@ -166,7 +166,7 @@ func Test_attachSchemaToMeta(t *testing.T) {
 		wantErr       bool
 		wantErrString string
 	}{
-		{"no attr groups", &Meta{}, nil, true, "no attr groups"},
+		{"no attr groups", &Meta{}, nil, true, "meta.Entity is nil"},
 		{"no attr tables", meta, nil, true, "no attr tables"},
 		{"no attr tables", meta, dsTableCache["empty"], true, "no attr tables"},
 		{"normal", meta, tables, false, ""},
@@ -190,8 +190,8 @@ func TestGetMetaFromDB(t *testing.T) {
 		entityName      string
 		metaJsonContain string
 	}{
-		{"not exist entity", "not-exist", "entity `not-exist` not found"},
-		{"normal", "user", `"attr_groups":[{"group_idx":1`},
+		{"not exist entity", "not-exist", "entity 'not-exist' not found"},
+		{"normal", "user", `"attr_groups":[{"group_idx":2`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

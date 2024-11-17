@@ -21,7 +21,7 @@ type Entity struct {
 
 type AttrGroup struct {
 	GroupIdx    uint32 `json:"group_idx" xorm:"pk autoincr"`
-	EntityIdx   uint32 `json:"-" xorm:"index"`
+	EntityIdx   uint32 `json:"entity_idx" xorm:"index"`
 	AttrTable   string `json:"attr_table" xorm:"unique"` // must real table in db
 	GroupName   string `json:"group_name" xorm:"index"`
 	Description string `json:"desc" xorm:"desc"`
@@ -41,7 +41,7 @@ func (a *AttrGroup) TableName() string {
 	return "idig_entity_attr_group"
 }
 
-func InitTable(engine *xorm.Engine) error {
+func InitEntityTable(engine *xorm.Engine) error {
 	err := engine.Sync2(new(Entity))
 	if err != nil {
 		return err
@@ -59,18 +59,11 @@ func InitTable(engine *xorm.Engine) error {
 		Status:      1,
 	}
 	engine.Insert(tenant)
-	tenantGroup := &AttrGroup{
-		GroupIdx:  0,
-		EntityIdx: tenant.EntityIdx,
-		AttrTable: tenant.TableName(),
-		GroupName: "tenant",
-	}
-	engine.Insert(tenantGroup)
 	return err
 }
 
 func init() {
-	config.RegisterInitTableFunction(InitTable)
+	config.RegisterInitTableFunction(InitEntityTable)
 }
 
 var (
@@ -127,6 +120,17 @@ func GetMetaFromDBAndCached(entityName string, engine *xorm.Engine) (*Meta, erro
 	if err != nil {
 		return nil, err
 	}
+	if a == nil {
+		// att 为空，构建 PkAttrTable 为主的属性
+		a = []*AttrGroup{
+			{
+				GroupIdx:    0,
+				EntityIdx:   e.EntityIdx,
+				AttrTable:   e.PkAttrTable,
+				Description: "auto build virtual attr group",
+			},
+		}
+	}
 	meta := &Meta{
 		Entity:     e,
 		AttrGroups: a,
@@ -170,6 +174,9 @@ func queryAttrGroupFromDB(entityId uint32, engine *xorm.Engine) ([]*AttrGroup, e
 }
 
 func attachSchemaToMeta(meta *Meta, tables map[string]*schemas.Table) error {
+	if meta.Entity == nil {
+		return fmt.Errorf("meta.Entity is nil")
+	}
 	gs := meta.AttrGroups
 	if gs == nil || len(gs) == 0 {
 		return fmt.Errorf("entity:'%s' has no attr groups", meta.Entity.EntityName)
@@ -187,9 +194,6 @@ func attachSchemaToMeta(meta *Meta, tables map[string]*schemas.Table) error {
 	}
 	meta.AttrTables = attrTable
 	return nil
-}
-
-type XX struct {
 }
 
 func (meta *Meta) Verify() error {
