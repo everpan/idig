@@ -29,6 +29,7 @@ func InitTable(engine *xorm.Engine) error {
 		return err
 	}
 	engine.Insert(DefaultTenant)
+	// entity.RegisterEntity(engine, "tenant", "租户信息", (&Tenant{}).TableName(), "tenant_id")
 	return nil
 }
 

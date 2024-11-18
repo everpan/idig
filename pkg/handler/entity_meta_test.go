@@ -20,7 +20,7 @@ func Test_getMeta(t *testing.T) {
 		Status:      1,
 	}
 	engine, _ := config.GetEngine(config.DefaultTenant.Driver, config.DefaultTenant.DataSource)
-	engine.Insert(noAttEntity)
+	_, _ = engine.Insert(noAttEntity)
 	tests := []struct {
 		name     string
 		entity   string
@@ -31,6 +31,7 @@ func Test_getMeta(t *testing.T) {
 			`{"code":-1,"msg":"entity 'not-exist' not found"}`},
 		{"not-attr-entity", "not-attr-entity", 400, "entry 'not-attr-entity' not found"},
 		{"tenant", "tenant", 200, `"primary_keys":["entity_idx"]`},
+		{"entity_relation", "entity_relation", 200, `"primary_keys":["relation_idx"]`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

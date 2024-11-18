@@ -4,6 +4,8 @@ import (
 	"crypto/md5"
 	"fmt"
 	"github.com/everpan/idig/pkg/config"
+
+	//"github.com/everpan/idig/pkg/config"
 	"github.com/goccy/go-json"
 	"sync"
 	"xorm.io/xorm"
@@ -13,7 +15,7 @@ import (
 type Entity struct {
 	EntityIdx   uint32 `json:"entity_idx" xorm:"pk autoincr"`
 	EntityName  string `json:"entity_name" xorm:"unique"`
-	Description string `json:"desc" xorm:"desc"`
+	Description string `json:"desc" xorm:"desc_str"`
 	PkAttrTable string `json:"pk_attr_table"`
 	PkAttrField string `json:"pk_attr_field"`
 	Status      int    `json:"status"` // 1-normal 2-del,name is updated to {name-del},because is unique
@@ -24,7 +26,7 @@ type AttrGroup struct {
 	EntityIdx   uint32 `json:"entity_idx" xorm:"index"`
 	AttrTable   string `json:"attr_table" xorm:"unique"` // must real table in db
 	GroupName   string `json:"group_name" xorm:"index"`
-	Description string `json:"desc" xorm:"desc"`
+	Description string `json:"desc" xorm:"desc_str"`
 }
 
 type Meta struct {
@@ -50,15 +52,9 @@ func InitEntityTable(engine *xorm.Engine) error {
 	if err != nil {
 		return err
 	}
-	tenant := &Entity{
-		EntityIdx:   0,
-		EntityName:  "tenant",
-		Description: "租户信息",
-		PkAttrTable: (&Entity{}).TableName(),
-		PkAttrField: "tenant_id",
-		Status:      1,
-	}
-	engine.Insert(tenant)
+	RegisterEntity(engine, "entity", "实体信息", (&Entity{}).TableName(), "entity_id")
+	RegisterEntity(engine, "entity_attr_group", "实体属性组信息", (&AttrGroup{}).TableName(), "group_idx")
+	RegisterEntity(engine, "tenant", "租户信息", (&config.Tenant{}).TableName(), "tenant_id")
 	return err
 }
 
@@ -71,6 +67,17 @@ var (
 	dsTableCache    = map[string]map[string]*schemas.Table{}
 	entityMetaCache = map[string]*Meta{}
 )
+
+func RegisterEntity(engine *xorm.Engine, name, desc, pkAttrTable, pkAttrField string) (int64, error) {
+	e := &Entity{
+		EntityName:  name,
+		Description: desc,
+		PkAttrTable: pkAttrTable,
+		PkAttrField: pkAttrField,
+		Status:      1,
+	}
+	return engine.Insert(e)
+}
 
 func SerialMeta(m *Meta) (string, error) {
 	data, err := json.Marshal(m)

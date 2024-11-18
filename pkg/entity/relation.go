@@ -2,6 +2,7 @@ package entity
 
 import (
 	"github.com/everpan/idig/pkg/config"
+	"sync"
 	"xorm.io/xorm"
 )
 
@@ -22,16 +23,41 @@ func (r *Relation) TableName() string {
 
 func InitRelationTable(engine *xorm.Engine) error {
 	err := engine.Sync2(new(Relation))
-	relEntity := &Entity{
-		EntityName:  "entity_relation",
-		PkAttrTable: (&Relation{}).TableName(),
-		PkAttrField: "relation_idx",
-		Status:      1,
-	}
-	engine.Insert(relEntity)
+	RegisterEntity(engine, "entity_relation", "实体关系", (&Relation{}).TableName(), "relation_idx")
 	return err
 }
 
 func init() {
 	config.RegisterInitTableFunction(InitRelationTable)
+}
+
+var (
+	muxRelation   sync.RWMutex
+	relationCache = make(map[uint32]map[uint32]*Relation)
+)
+
+func queryRelation(engine *xorm.Engine, LeftEntityIdx uint32) ([]*Relation, error) {
+	q := &Relation{
+		EntityLeft: LeftEntityIdx,
+	}
+	var r []*Relation
+	err := engine.Find(&r, q)
+	updateRelationCache(r)
+	return r, err
+}
+
+func updateRelationCache(relations []*Relation) {
+	if relations == nil {
+		return
+	}
+	muxRelation.Lock()
+	defer muxRelation.Unlock()
+	for _, v := range relations {
+		sub, ok := relationCache[v.EntityLeft]
+		if !ok {
+			sub = make(map[uint32]*Relation)
+			relationCache[v.EntityLeft] = sub
+		}
+		sub[v.EntityRight] = v
+	}
 }
