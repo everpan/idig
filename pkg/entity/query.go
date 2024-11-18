@@ -2,6 +2,7 @@ package entity
 
 import (
 	"errors"
+	"fmt"
 	"github.com/goccy/go-json"
 )
 
@@ -59,13 +60,14 @@ func (q *Query) Parse(jsonStr string) error {
 	}
 	qMsg, ok := qSt["query"]
 	if !ok {
-		return errors.New("query not found")
+		return errors.New("'query' not found")
 	}
 	var entities []json.RawMessage
 	err = json.Unmarshal([]byte(qMsg), &entities)
 	if err != nil {
 		return err
 	}
+	fmt.Printf("entity size: %d\n", len(entities))
 	return nil
 }
 func (q *Query) ToSql(jsonStr string) (string, error) {

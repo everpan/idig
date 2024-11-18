@@ -11,6 +11,7 @@ func TestQuery_Parse(t *testing.T) {
 		wantErr string
 	}{
 		{"not has query", "{}", "not found"},
+		{"query is not array", `{"query":{}}`, "slice unexpected end of JSON input"},
 		{"query user", `{
   "query": [
     {
