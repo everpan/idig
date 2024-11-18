@@ -1,5 +1,10 @@
 package entity
 
+import (
+	"errors"
+	"github.com/goccy/go-json"
+)
+
 type Where struct {
 	Col      string   `json:"col"`
 	Op       string   `json:"op"` // operate
@@ -42,4 +47,27 @@ type JMeta struct {
 	EntryInfo   *Entity      `json:"entry_info"`
 	GroupInfo   []*AttrGroup `json:"group_info"`
 	PrimaryKeys []string     `json:"primary_keys"`
+}
+type Query struct{}
+
+func (q *Query) Parse(jsonStr string) error {
+	qSt := map[string]json.RawMessage{}
+	var err error
+	err = json.Unmarshal([]byte(jsonStr), &qSt)
+	if err != nil {
+		return err
+	}
+	qMsg, ok := qSt["query"]
+	if !ok {
+		return errors.New("query not found")
+	}
+	var entities []json.RawMessage
+	err = json.Unmarshal([]byte(qMsg), &entities)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+func (q *Query) ToSql(jsonStr string) (string, error) {
+	return "", nil
 }
