@@ -4,8 +4,6 @@ import (
 	"crypto/md5"
 	"fmt"
 	"github.com/everpan/idig/pkg/config"
-
-	//"github.com/everpan/idig/pkg/config"
 	"github.com/goccy/go-json"
 	"sync"
 	"xorm.io/xorm"
