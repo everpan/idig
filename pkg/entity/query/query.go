@@ -1,10 +1,10 @@
 package query
 
 import (
-	"encoding/json"
+	// "encoding/json"
 	"errors"
 	"fmt"
-	// "github.com/goccy/go-json"
+	"github.com/goccy/go-json"
 )
 
 type SelectItem struct {
@@ -31,79 +31,61 @@ type Limit struct {
 	Offset int    `json:"off"`
 	Num    int    `json:"num"`
 }
-type ObjectAlias struct {
+type EntityOrSubQuery struct {
 	Entity string `json:"entity"`
 	Alias  string `json:"alias"`
 	Query  *Query `json:"query"`
 }
 type From struct {
-	EntityAlias []*ObjectAlias `json:"entities"`
+	EntityAlias []*EntityOrSubQuery `json:"entities"`
 }
 
 type Query struct {
-	Version     string       `json:"version,omitempty"`
-	SelectItems []SelectItem `json:"select"`
-	From        string       `json:"from"`
-	Wheres      []*Where     `json:"where,omitempty"`
-	Orders      []*Order     `json:"order,omitempty"`
-	Limit       *Limit       `json:"limit,omitempty"`
+	Version     string        `json:"version,omitempty"`
+	SelectItems []*SelectItem `json:"select"`
+	From        *From         `json:"from"`
+	Wheres      []*Where      `json:"where,omitempty"`
+	Orders      []*Order      `json:"order,omitempty"`
+	Limit       *Limit        `json:"limit,omitempty"`
 }
 type SubQuery struct {
 	Query *Query `json:"query"`
 	Alias string `json:"alias"`
 }
 
-func Parse(jsonStr string) (*Query, error) {
+func Parse(data []byte) (*Query, error) {
 	q := &Query{}
 	qSt := map[string]json.RawMessage{}
 	var err error
-	err = json.Unmarshal([]byte(jsonStr), &qSt)
+	err = json.Unmarshal(data, &qSt)
 	if err != nil {
 		return nil, err
 	}
-	qMsg, ok := qSt["entities"]
+	qMsg, ok := qSt["select"]
 	if !ok {
-		return nil, errors.New("'query' not found")
+		return nil, errors.New("'select' not found")
 	}
-	var entities []map[string]json.RawMessage
-	err = json.Unmarshal([]byte(qMsg), &entities)
+	err = q.parseSelectItems(qMsg)
 	if err != nil {
 		return nil, err
 	}
-	if len(entities) == 0 {
-		return nil, errors.New("no entities found")
-	}
-	//for entityName, entityData := range entities {
-	//	q.parseEntityQuery(entityData)
-	//}
-	fmt.Printf("entity size: %d\n", len(entities))
 	return q, nil
 }
 func (q *Query) ToSql(jsonStr string) (string, error) {
 	return "", nil
 }
 
-func (q *Query) parseEntityQuery(entityData []byte) error {
-	err := json.Unmarshal(entityData, &q)
-
+// parseSelectItems 解析选择字段
+func (q *Query) parseSelectItems(data []byte) error {
+	var items []any
+	err := json.Unmarshal(data, &items)
 	if err != nil {
 		return err
 	}
-	return nil
-}
-
-// parseSelectItems 解析选择字段
-func (q *Query) parseSelectItems(jsonStr string) ([]*SelectItem, error) {
-	var items []any
-	err := json.Unmarshal([]byte(jsonStr), &items)
-	if err != nil {
-		return nil, err
-	}
-	var selectItem []*SelectItem
 	for _, item := range items {
 		switch iVal := item.(type) {
 		case string:
-			selectItem = append(selectItem, &SelectItem{Col: iVal})
+			q.SelectItems = append(q.SelectItems, &SelectItem{Col: iVal})
 		//case []byte:
 		//	selectItem = append(selectItem, &SelectItem{Col: string(iVal)})
 		case map[string]any:
@@ -111,25 +93,24 @@ func (q *Query) parseSelectItems(jsonStr string) ([]*SelectItem, error) {
 			aItem.Col, _ = iVal["col"].(string)
 			aItem.Alias, _ = iVal["alias"].(string)
 			aItem.Opt, _ = iVal["opt"].(string)
-			selectItem = append(selectItem, &aItem)
+			q.SelectItems = append(q.SelectItems, &aItem)
 		default:
 			fmt.Printf("unknown type: %T\n", iVal)
 		}
 	}
-	return selectItem, nil
+	return nil
 }
 
-func (q *Query) parseWhere(jsonStr string) ([]*Where, error) {
-	var w []*Where
-	err := json.Unmarshal([]byte(jsonStr), &w)
+func (q *Query) parseWhere(data []byte) error {
+	err := json.Unmarshal(data, &q.Wheres)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	err = VerifyWhere(w)
+	err = VerifyWhere(q.Wheres)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return w, nil
+	return nil
 }
 
 func (w *Where) Verify() error {
@@ -181,19 +162,18 @@ func VerifyWhere(ws []*Where) error {
 	return nil
 }
 
-func (q *Query) parseOrder(jsonStr string) ([]*Order, error) {
-	var o []*Order
-	err := json.Unmarshal([]byte(jsonStr), &o)
+func (q *Query) parseOrder(data []byte) error {
+	err := json.Unmarshal(data, &q.Orders)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	for _, o1 := range o {
+	for _, o1 := range q.Orders {
 		err = o1.Verify()
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
-	return o, nil
+	return nil
 }
 
 func (o *Order) Verify() error {
@@ -212,32 +192,32 @@ func (o *Order) Verify() error {
 	return nil
 }
 
-func (q *Query) parseLimit(jsonStr string) (*Limit, error) {
-	var l = Limit{}
-	err := json.Unmarshal([]byte(jsonStr), &l)
+func (q *Query) parseLimit(data []byte) error {
+	err := json.Unmarshal(data, q.Limit)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return &l, nil
+	return nil
 }
 
-func (q *Query) parseFrom(jsonStr string) (*From, error) {
-	var f = From{}
+func (q *Query) parseFrom(data []byte) error {
 	var m any
-	err := json.Unmarshal([]byte(jsonStr), &m)
+	err := json.Unmarshal(data, &m)
 	if err != nil {
-		return nil, err
+		return err
 	}
+	var f = From{}
+
 	switch v := m.(type) {
 	case string:
-		f.EntityAlias = append(f.EntityAlias, &ObjectAlias{Entity: v})
+		f.EntityAlias = append(f.EntityAlias, &EntityOrSubQuery{Entity: v})
 	case []any:
 		for _, s := range v {
 			switch s1 := s.(type) {
 			case string:
-				f.EntityAlias = append(f.EntityAlias, &ObjectAlias{Entity: s1})
+				f.EntityAlias = append(f.EntityAlias, &EntityOrSubQuery{Entity: s1})
 			case map[string]any:
-				ea := ObjectAlias{}
+				ea := EntityOrSubQuery{}
 				ea.Entity, _ = s1["entity"].(string)
 				ea.Alias, _ = s1["alias"].(string)
 				f.EntityAlias = append(f.EntityAlias, &ea)
@@ -246,20 +226,15 @@ func (q *Query) parseFrom(jsonStr string) (*From, error) {
 			}
 		}
 	case map[string]any:
-		for alias, sub := range v {
-			ea := ObjectAlias{}
-			ea.Alias = alias
-			fmt.Printf("sub %v", sub)
-			subData, _ := json.Marshal(sub)
-			fmt.Printf("sub data: %v", string(subData))
-			q2, err2 := Parse(string(subData))
-			if err2 != nil {
-				return nil, err2
-			}
-			ea.Query = q2
+		ea := EntityOrSubQuery{}
+		q2, err2 := Parse(data)
+		if err2 != nil {
+			return err2
 		}
+		ea.Query = q2
 	default:
-		return nil, fmt.Errorf("unknown type: %T", v)
+		return fmt.Errorf("unknown type: %T", v)
 	}
-	return &f, nil
+	q.From = &f
+	return nil
 }
