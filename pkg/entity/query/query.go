@@ -53,21 +53,34 @@ type SubQuery struct {
 	Alias string `json:"alias"`
 }
 
+func NewQuery() *Query {
+	return &Query{
+		Version: "1.0",
+		From:    &From{},
+	}
+}
+
 func Parse(data []byte) (*Query, error) {
-	q := &Query{}
+	q := NewQuery()
 	qSt := map[string]json.RawMessage{}
 	var err error
 	err = json.Unmarshal(data, &qSt)
 	if err != nil {
 		return nil, err
 	}
-	qMsg, ok := qSt["select"]
-	if !ok {
-		return nil, errors.New("'select' not found")
+	if _, ok := qSt["select"]; !ok {
+		return nil, errors.New(fmt.Sprint("query does not contain select items"))
 	}
-	err = q.parseSelectItems(qMsg)
-	if err != nil {
-		return nil, err
+	var errs [5]error
+	errs[0] = q.parseSelectItems(qSt["select"])
+	errs[1] = q.parseFrom(qSt["from"])
+	errs[2] = q.parseWhere(qSt["where"])
+	errs[3] = q.parseOrder(qSt["order"])
+	errs[4] = q.parseLimit(qSt["limit"])
+	for _, e := range errs {
+		if e != nil {
+			return nil, e
+		}
 	}
 	return q, nil
 }
@@ -102,6 +115,9 @@ func (q *Query) parseSelectItems(data []byte) error {
 }
 
 func (q *Query) parseWhere(data []byte) error {
+	if data == nil {
+		return nil
+	}
 	err := json.Unmarshal(data, &q.Wheres)
 	if err != nil {
 		return err
@@ -163,6 +179,9 @@ func VerifyWhere(ws []*Where) error {
 }
 
 func (q *Query) parseOrder(data []byte) error {
+	if data == nil {
+		return nil
+	}
 	err := json.Unmarshal(data, &q.Orders)
 	if err != nil {
 		return err
@@ -193,6 +212,9 @@ func (o *Order) Verify() error {
 }
 
 func (q *Query) parseLimit(data []byte) error {
+	if data == nil {
+		return nil
+	}
 	err := json.Unmarshal(data, q.Limit)
 	if err != nil {
 		return err
@@ -201,6 +223,9 @@ func (q *Query) parseLimit(data []byte) error {
 }
 
 func (q *Query) parseFrom(data []byte) error {
+	if data == nil {
+		return fmt.Errorf("from is empty")
+	}
 	var m any
 	err := json.Unmarshal(data, &m)
 	if err != nil {

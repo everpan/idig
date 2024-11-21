@@ -14,24 +14,25 @@ func TestQuery_Parse(t *testing.T) {
 		wantQuery func(*Query, error)
 	}{
 		{"not has query", "{}", func(query *Query, err error) {
-			assert.Contains(t, err.Error(), "'select' not found")
+			assert.Contains(t, err.Error(), "query does not contain select items")
 		}},
 		{"select is not array", `{"select":{}}`, func(query *Query, err error) {
 			assert.Nil(t, query)
 			assert.Contains(t, err.Error(), "slice unexpected end of JSON input")
 		}},
-		{"empty select item", `{"select":[]}`, func(query *Query, err error) {
+		{"empty from", `{"select":[]}`, func(query *Query, err error) {
+			assert.NotNil(t, err)
+			assert.Contains(t, err.Error(), "from is empty")
+		}},
+		{"empty select item", `{"select":[],"from":""}`, func(query *Query, err error) {
+			assert.Nil(t, err)
 			assert.Nil(t, query.SelectItems)
 			assert.Equal(t, 0, len(query.SelectItems))
 		}},
-		{"query user", `{
-  "query": [
-    {
-      "user": {}
-    }
-  ]
-}`, func(query *Query, err error) {
-
+		{"query user", `{"select":["name","age"],"from":"user","where":[{"col":"name","op":"eq","val":"test"}]}`, func(query *Query, err error) {
+			assert.Nil(t, err)
+			assert.Equal(t, "name", query.SelectItems[0].Col)
+			assert.Equal(t, len(query.Wheres), 1)
 		}},
 	}
 	for _, tt := range tests {
