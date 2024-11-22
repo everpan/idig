@@ -22,7 +22,7 @@ func TestQuery_Parse(t *testing.T) {
 		}},
 		{"empty from", `{"select":[]}`, func(query *Query, err error) {
 			assert.NotNil(t, err)
-			assert.Contains(t, err.Error(), "from is empty")
+			assert.Contains(t, err.Error(), "'from' is empty")
 		}},
 		{"empty select item", `{"select":[],"from":""}`, func(query *Query, err error) {
 			assert.Nil(t, err)
@@ -145,8 +145,10 @@ func TestQuery_parseFrom(t *testing.T) {
 			assert.Equal(t, "a0", from.EntityAlias[0].Alias)
 			assert.Equal(t, "b002", from.EntityAlias[1].Entity)
 		}},
-		{"sub query", `{"select":["a","b"]}`, func(from *From, err error) {
+		{"sub query", `{"select":["a","b"],"from":["a","b"]}`, func(from *From, err error) {
 			assert.Nil(t, err)
+			assert.Equal(t, 1, len(from.EntityAlias))
+			assert.Equal(t, "a", from.EntityAlias[0].Query.From.EntityAlias[0].Entity)
 			//assert.Equal(t, "aa", from.EntityAlias[0].Entity)
 			//assert.Equal(t, "b002", from.EntityAlias[1].Entity)
 		}},

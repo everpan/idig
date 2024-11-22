@@ -37,26 +37,24 @@ type EntityOrSubQuery struct {
 	Query  *Query `json:"query"`
 }
 type From struct {
-	EntityAlias []*EntityOrSubQuery `json:"entities"`
+	EntityAlias []*EntityOrSubQuery `json:"from"`
 }
 
 type Query struct {
-	Version     string        `json:"version,omitempty"`
+	// Version     string        `json:"version,omitempty"`
+	// Entity      string        `json:"entity,omitempty"`
+	Alias       string        `json:"alias,omitempty"`
 	SelectItems []*SelectItem `json:"select"`
 	From        *From         `json:"from"`
 	Wheres      []*Where      `json:"where,omitempty"`
 	Orders      []*Order      `json:"order,omitempty"`
 	Limit       *Limit        `json:"limit,omitempty"`
 }
-type SubQuery struct {
-	Query *Query `json:"query"`
-	Alias string `json:"alias"`
-}
 
 func NewQuery() *Query {
 	return &Query{
-		Version: "1.0",
-		From:    &From{},
+		// Version: "1.0",
+		From: &From{},
 	}
 }
 
@@ -70,6 +68,9 @@ func Parse(data []byte) (*Query, error) {
 	}
 	if _, ok := qSt["select"]; !ok {
 		return nil, errors.New(fmt.Sprint("query does not contain select items"))
+	}
+	if _, ok := qSt["alias"]; ok {
+		q.Alias = string(qSt["alias"])
 	}
 	var errs [5]error
 	errs[0] = q.parseSelectItems(qSt["select"])
@@ -224,7 +225,7 @@ func (q *Query) parseLimit(data []byte) error {
 
 func (q *Query) parseFrom(data []byte) error {
 	if data == nil {
-		return fmt.Errorf("from is empty")
+		return fmt.Errorf("'from' is empty")
 	}
 	var m any
 	err := json.Unmarshal(data, &m)
@@ -247,7 +248,8 @@ func (q *Query) parseFrom(data []byte) error {
 				ea.Alias, _ = s1["alias"].(string)
 				f.EntityAlias = append(f.EntityAlias, &ea)
 			default:
-				fmt.Printf("unknown 00 type: %T\n", s)
+				// fmt.Printf("unknown 00 type: %T\n", s)
+				return fmt.Errorf("unknown from type: %T, need []string", s)
 			}
 		}
 	case map[string]any:
@@ -257,8 +259,9 @@ func (q *Query) parseFrom(data []byte) error {
 			return err2
 		}
 		ea.Query = q2
+		f.EntityAlias = append(f.EntityAlias, &ea)
 	default:
-		return fmt.Errorf("unknown type: %T", v)
+		return fmt.Errorf("unknown from type: %T", v)
 	}
 	q.From = &f
 	return nil
