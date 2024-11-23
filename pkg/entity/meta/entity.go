@@ -1,4 +1,4 @@
-package entity
+package meta
 
 import (
 	"crypto/md5"
@@ -6,6 +6,7 @@ import (
 	"github.com/everpan/idig/pkg/config"
 	"github.com/goccy/go-json"
 	"sync"
+	"xorm.io/builder"
 	"xorm.io/xorm"
 	"xorm.io/xorm/schemas"
 )
@@ -178,47 +179,47 @@ func queryAttrGroupFromDB(entityId uint32, engine *xorm.Engine) ([]*AttrGroup, e
 	return r, err
 }
 
-func attachSchemaToMeta(meta *Meta, tables map[string]*schemas.Table) error {
-	if meta.Entity == nil {
-		return fmt.Errorf("meta.Entity is nil")
+func attachSchemaToMeta(m *Meta, tables map[string]*schemas.Table) error {
+	if m.Entity == nil {
+		return fmt.Errorf("m.Entity is nil")
 	}
-	gs := meta.AttrGroups
+	gs := m.AttrGroups
 	if gs == nil || len(gs) == 0 {
-		return fmt.Errorf("entity:'%s' has no attr groups", meta.Entity.EntityName)
+		return fmt.Errorf("entity:'%s' has no attr groups", m.Entity.EntityName)
 	}
 	if tables == nil || len(tables) == 0 {
-		return fmt.Errorf("entity:'%s' has no attr tables", meta.Entity.EntityName)
+		return fmt.Errorf("entity:'%s' has no attr tables", m.Entity.EntityName)
 	}
 	attrTable := make(map[string]*schemas.Table)
 	for _, g := range gs {
 		gt, ok := tables[g.AttrTable]
 		if !ok {
-			return fmt.Errorf("attr table '%s' for entry '%s' not found", g.AttrTable, meta.Entity.EntityName)
+			return fmt.Errorf("attr table '%s' for entry '%s' not found", g.AttrTable, m.Entity.EntityName)
 		}
 		attrTable[g.AttrTable] = gt
 	}
-	meta.AttrTables = attrTable
+	m.AttrTables = attrTable
 	return nil
 }
 
-func (meta *Meta) Verify() error {
+func (m *Meta) Verify() error {
 	var errs []error
-	if meta.Entity == nil {
+	if m.Entity == nil {
 		errs = append(errs, fmt.Errorf("entity is nil"))
 	}
-	if meta.AttrGroups == nil {
+	if m.AttrGroups == nil {
 		errs = append(errs, fmt.Errorf("attr_groups is nil"))
 	}
-	if meta.AttrTables == nil {
+	if m.AttrTables == nil {
 		errs = append(errs, fmt.Errorf("attr_tables is nil"))
 	}
-	if meta.AttrGroups != nil && meta.AttrTables != nil {
-		if len(meta.AttrGroups) == 0 {
+	if m.AttrGroups != nil && m.AttrTables != nil {
+		if len(m.AttrGroups) == 0 {
 			errs = append(errs, fmt.Errorf("attr_groups is empty"))
 		}
-		if len(meta.AttrTables) == 0 {
+		if len(m.AttrTables) == 0 {
 			errs = append(errs, fmt.Errorf("attr_tables is empty"))
-		} else if len(meta.AttrGroups) != len(meta.AttrTables) {
+		} else if len(m.AttrGroups) != len(m.AttrTables) {
 			errs = append(errs, fmt.Errorf("length of attr_groups and attr_tables is not equal"))
 		}
 	}
@@ -226,4 +227,56 @@ func (meta *Meta) Verify() error {
 		return fmt.Errorf("%v", errs)
 	}
 	return nil
+}
+
+// AttrGroupTableNameFromCols 通过列找到列所存在的属性表; 不包含主表 PkAttrTable
+func (m *Meta) AttrGroupTableNameFromCols(cols []string) []string {
+	var tables []string
+	if len(cols) == 0 {
+		cols = append(cols, "*")
+	}
+	if len(cols) == 1 && cols[0] == "*" {
+		for _, at := range m.AttrTables {
+			tables = append(tables, at.Name)
+		}
+		return tables
+	}
+	colTable := make(map[string]string)
+	for _, t := range m.AttrTables {
+		for _, c := range t.Columns() {
+			if t.Name != m.Entity.PkAttrTable && c.Name == m.Entity.PkAttrField {
+				continue
+			}
+			colTable[c.Name] = t.Name
+		}
+	}
+	type void struct{}
+	var empty = void{}
+	tableCol := make(map[string]void)
+
+	for _, col := range cols {
+		if t, ok := colTable[col]; !ok {
+			tableCol[t] = empty
+		}
+		if len(tableCol) == len(m.AttrTables) {
+			break //包含所有表，终止
+		}
+	}
+	delete(tableCol, m.Entity.PkAttrTable)
+	for t := range tableCol {
+		tables = append(tables, t)
+	}
+	return tables
+}
+
+func (m *Meta) JoinAttrsFromColumns(bld *builder.Builder, cols []string) *builder.Builder {
+	tables := m.AttrGroupTableNameFromCols(cols)
+	e := m.Entity
+	joinCond := fmt.Sprintf("%s.%s = %%s.%s", e.PkAttrTable, e.PkAttrField, e.PkAttrField)
+	bld.Select(cols...)
+	bld.From(e.PkAttrTable)
+	for _, t := range tables {
+		bld.LeftJoin(t, fmt.Sprintf(joinCond, t))
+	}
+	return bld
 }

@@ -3,7 +3,7 @@ package handler
 import (
 	"github.com/everpan/idig/pkg/config"
 	"github.com/everpan/idig/pkg/core"
-	"github.com/everpan/idig/pkg/entity"
+	"github.com/everpan/idig/pkg/entity/meta"
 	"github.com/stretchr/testify/assert"
 	"io"
 	"net/http"
@@ -13,7 +13,7 @@ import (
 
 func Test_getMeta(t *testing.T) {
 	app := core.CreateApp()
-	noAttEntity := &entity.Entity{
+	noAttEntity := &meta.Entity{
 		EntityName:  "not-attr-entity",
 		PkAttrTable: "not-attr-entity",
 		PkAttrField: "not-attr-entity",

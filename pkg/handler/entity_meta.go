@@ -3,7 +3,7 @@ package handler
 import (
 	"fmt"
 	"github.com/everpan/idig/pkg/config"
-	"github.com/everpan/idig/pkg/entity"
+	"github.com/everpan/idig/pkg/entity/meta"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -24,10 +24,10 @@ func getMeta(c *config.Context) error {
 	if eName == "" {
 		c.SendBadRequestError(fmt.Errorf("no entity specified"))
 	}
-	meta := entity.GetMetaFromCache(eName)
+	meta := meta.GetMetaFromCache(eName)
 	var err error
 	if meta == nil {
-		meta, err = entity.GetMetaFromDBAndCached(eName, c.Engine())
+		meta, err = meta.GetMetaFromDBAndCached(eName, c.Engine())
 		if err != nil {
 			return c.SendBadRequestError(err)
 		}

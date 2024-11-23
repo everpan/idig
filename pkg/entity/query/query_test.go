@@ -72,9 +72,8 @@ func TestQuery_parseSelectItems(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			q := &Query{}
-			err := q.parseSelectItems([]byte(tt.jsonStr))
-			tt.wantErr(q.SelectItems, err)
+			selectItems, err := parseSelectItems([]byte(tt.jsonStr))
+			tt.wantErr(selectItems, err)
 		})
 	}
 }
@@ -104,9 +103,8 @@ func TestQuery_parseWhere(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			q := &Query{}
-			err := q.parseWhere([]byte(tt.jsonStr))
-			tt.wantErr(q.Wheres, err)
+			wheres, err := parseWhere([]byte(tt.jsonStr))
+			tt.wantErr(wheres, err)
 		})
 	}
 }
@@ -154,10 +152,9 @@ func TestQuery_parseFrom(t *testing.T) {
 		}},
 	}
 	for _, tt := range tests {
-		q := &Query{}
 		t.Run(tt.name, func(t *testing.T) {
-			err := q.parseFrom([]byte(tt.jsonStr))
-			tt.wantErr(q.From, err)
+			from, err := parseFrom([]byte(tt.jsonStr))
+			tt.wantErr(from, err)
 		})
 	}
 }

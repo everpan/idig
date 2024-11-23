@@ -1,4 +1,4 @@
-package entity
+package meta
 
 import (
 	"github.com/goccy/go-json"
@@ -30,14 +30,14 @@ func (attr *Attr) FromColumn(attrTable string, col *schemas.Column) {
 	attr.AttrTable = attrTable
 }
 
-func (meta *Meta) ToJMeta() *JMeta {
+func (m *Meta) ToJMeta() *JMeta {
 	mj := &JMeta{
-		Entity:      meta.Entity.EntityName,
-		EntryInfo:   meta.Entity,
-		GroupInfo:   meta.AttrGroups,
-		PrimaryKeys: meta.AttrTables[meta.Entity.PkAttrTable].PrimaryKeys,
+		Entity:      m.Entity.EntityName,
+		EntryInfo:   m.Entity,
+		GroupInfo:   m.AttrGroups,
+		PrimaryKeys: m.AttrTables[m.Entity.PkAttrTable].PrimaryKeys,
 	}
-	for table, schema := range meta.AttrTables {
+	for table, schema := range m.AttrTables {
 		for _, col := range schema.Columns() {
 			attr := &Attr{}
 			attr.FromColumn(table, col)
@@ -47,7 +47,7 @@ func (meta *Meta) ToJMeta() *JMeta {
 	return mj
 }
 
-func (meta *Meta) Marshal() ([]byte, error) {
-	jm := meta.ToJMeta()
+func (m *Meta) Marshal() ([]byte, error) {
+	jm := m.ToJMeta()
 	return json.Marshal(jm)
 }

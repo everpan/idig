@@ -2,6 +2,7 @@ package entity
 
 import (
 	"github.com/everpan/idig/pkg/config"
+	"github.com/everpan/idig/pkg/entity/meta"
 	"sync"
 	"xorm.io/xorm"
 )
@@ -23,7 +24,7 @@ func (r *Relation) TableName() string {
 
 func InitRelationTable(engine *xorm.Engine) error {
 	err := engine.Sync2(new(Relation))
-	RegisterEntity(engine, "entity_relation", "实体关系", (&Relation{}).TableName(), "relation_idx")
+	meta.RegisterEntity(engine, "entity_relation", "实体关系", (&Relation{}).TableName(), "relation_idx")
 	return err
 }
 

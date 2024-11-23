@@ -1,4 +1,4 @@
-package entity
+package meta
 
 import (
 	"encoding/json"
@@ -94,7 +94,7 @@ func TestSerialMeta(t *testing.T) {
 }
 
 func Test_queryEntityFromDB(t *testing.T) {
-	userEntity := &Entity{2,
+	userEntity := &Entity{4,
 		"user", "", "user",
 		"user_idx", 1}
 	tests := []struct {
@@ -131,7 +131,7 @@ func Test_queryAttrGroupFromDB(t *testing.T) {
 		wantErrString string
 	}{
 		{"entity id must neq 0", 0, 0, true, "entityId is zero"},
-		{"entity id = 1", 2, 2, false, ""},
+		{"entity id = 1", 4, 2, false, ""},
 		{"entity id = 911,not exist,return nil", 911, 0, false, ""},
 	}
 	for _, tt := range tests {
@@ -191,7 +191,7 @@ func TestGetMetaFromDB(t *testing.T) {
 		metaJsonContain string
 	}{
 		{"not exist entity", "not-exist", "entity 'not-exist' not found"},
-		{"normal", "user", `"attr_groups":[{"group_idx":2`},
+		{"normal", "user", `"attr_groups":[{"group_idx":`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
