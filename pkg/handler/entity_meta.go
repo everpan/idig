@@ -24,13 +24,13 @@ func getMeta(c *config.Context) error {
 	if eName == "" {
 		c.SendBadRequestError(fmt.Errorf("no entity specified"))
 	}
-	meta := meta.GetMetaFromCache(eName)
+	m := meta.GetMetaFromCache(eName)
 	var err error
-	if meta == nil {
-		meta, err = meta.GetMetaFromDBAndCached(eName, c.Engine())
+	if m == nil {
+		m, err = meta.GetMetaFromDBAndCached(eName, c.Engine())
 		if err != nil {
 			return c.SendBadRequestError(err)
 		}
 	}
-	return c.SendSuccess(meta.ToJMeta())
+	return c.SendSuccess(m.ToJMeta())
 }
