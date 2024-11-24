@@ -3,9 +3,8 @@ package query
 import "github.com/goccy/go-json"
 
 type Limit struct {
-	Col    string `json:"col"`
-	Offset int    `json:"off"`
-	Num    int    `json:"num"`
+	Offset int `json:"offset"`
+	Num    int `json:"num"`
 }
 
 func parseLimit(data []byte) (*Limit, error) {

@@ -111,15 +111,10 @@ func VerifyWhere(ws []*Where) error {
 			return err
 		}
 	}
-	for i, w := range ws {
+	for _, w := range ws {
 		err = w.Verify()
 		if err != nil {
 			return err
-		}
-		if i > 0 {
-			if w.Tie == "" {
-				return errors.New("where tie is empty")
-			}
 		}
 		if w.SubWhere != nil {
 			err = VerifyWhere(w.SubWhere)

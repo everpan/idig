@@ -59,12 +59,15 @@ func Parse(data []byte) (*Query, error) {
 	return q, nil
 }
 
+// BuildSQL 构建order/limit/where
 func (q *Query) BuildSQL(bld *builder.Builder) error {
 	var err error
-	for _, w := range q.Wheres {
-		err = w.BuildSQL(bld)
-		if err != nil {
-			return err
+	if len(q.Wheres) > 0 {
+		for _, w := range q.Wheres {
+			err = w.BuildSQL(bld)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	if q.Orders != nil {
@@ -76,6 +79,7 @@ func (q *Query) BuildSQL(bld *builder.Builder) error {
 	}
 	if q.Limit != nil {
 		bld.Limit(q.Limit.Num, q.Limit.Offset)
+		// num must gt 0
 	}
 	return nil
 }

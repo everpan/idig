@@ -2,6 +2,8 @@ package query
 
 import (
 	"github.com/goccy/go-json"
+	"xorm.io/builder"
+
 	// "encoding/json"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -174,6 +176,47 @@ func TestGJson(t *testing.T) {
 			d, err := json.Marshal(&tt.obj)
 			assert.Nil(t, err)
 			assert.Equal(t, tt.jsonStr, string(d))
+		})
+	}
+}
+
+func TestQuery_BuildSQL(t *testing.T) {
+	tests := []struct {
+		name      string
+		queryJSON string
+		wantSQL   string
+		wantErr   string
+	}{
+		{"where cond", `{"select":["*"],"from":"t",
+"where":[{"col":"a","op":"eq","val":"a-val"},
+{"col":"a1","op":"lt","val":"a1-val"},
+{"tie":"or","col":"a2","op":"like","val":"jk"}
+]}`,
+			"SELECT * FROM test WHERE a=? AND a1<? OR a2 LIKE ?", ""},
+		{"limit", `{"select":["a"],"from":"t",
+"where":[{"col":"a","op":"eq","val":"a-v"}],
+"limit":{"offset":23}}`, "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse([]byte(tt.queryJSON))
+			if err != nil {
+				t.Logf(err.Error())
+				assert.Contains(t, err.Error(), tt.wantErr)
+			}
+			// t.Logf("query %v", q)
+			assert.NotNil(t, q)
+			bld := builder.Dialect("sqlite3")
+			bld.Select("*").From("test")
+			q.BuildSQL(bld)
+			sql, args, err := bld.ToSQL()
+			if err != nil {
+				t.Logf(err.Error())
+				assert.Contains(t, err.Error(), tt.wantErr)
+			}
+			data, err := json.Marshal(q)
+			t.Logf("query %v : %v,args:%v", string(data), err, args)
+			assert.Equal(t, tt.wantSQL, sql)
 		})
 	}
 }
