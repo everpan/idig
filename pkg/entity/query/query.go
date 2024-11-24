@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/goccy/go-json"
+	"strings"
 	"xorm.io/builder"
 )
 
@@ -17,6 +18,10 @@ type Query struct {
 	Wheres      []*Where      `json:"where,omitempty"`
 	Orders      []*Order      `json:"order,omitempty"`
 	Limit       *Limit        `json:"limit,omitempty"`
+}
+
+type BuilderSQL interface {
+	BuildSQL(bld *builder.Builder) error
 }
 
 func NewQuery() *Query {
@@ -53,28 +58,24 @@ func Parse(data []byte) (*Query, error) {
 	}
 	return q, nil
 }
-func (q *Query) ToSql(jsonStr string) (string, error) {
-	return "", nil
-}
 
-func (q *Query) Build(dialect string) (*builder.Builder, error) {
-	b := builder.Dialect(dialect)
-	// select
-	var items []string
-	for _, item := range q.SelectItems {
-		items = append(items, item.String())
+func (q *Query) BuildSQL(bld *builder.Builder) error {
+	var err error
+	for _, w := range q.Wheres {
+		err = w.BuildSQL(bld)
+		if err != nil {
+			return err
+		}
 	}
-	b.Select(items...)
-	// from
-	b.From(q.From.EntityAlias[0].Entity)
-	return b, nil
+	if q.Orders != nil {
+		var os []string
+		for _, o := range q.Orders {
+			os = append(os, o.String())
+		}
+		bld.OrderBy(strings.Join(os, ","))
+	}
+	if q.Limit != nil {
+		bld.Limit(q.Limit.Num, q.Limit.Offset)
+	}
+	return nil
 }
-
-//func (q *Query) BuildFromEntity(dialect string, entityName string, m *meta.Meta) (*builder.Builder, error) {
-//	// 单个实体，验证列，构建属性组
-//	cols := make([]string, 0)
-//	for _, item := range q.SelectItems {
-//		cols = append(cols, item.Col)
-//	}
-//	// build col/schema
-//}

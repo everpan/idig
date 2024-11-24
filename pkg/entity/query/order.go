@@ -2,6 +2,7 @@ package query
 
 import (
 	"errors"
+	"fmt"
 	"github.com/goccy/go-json"
 )
 
@@ -42,4 +43,8 @@ func (o *Order) Verify() error {
 		return errors.New("order option must be 'desc' or 'asc'")
 	}
 	return nil
+}
+
+func (o *Order) String() string {
+	return fmt.Sprintf("%s %s", o.Col, o.Option)
 }
