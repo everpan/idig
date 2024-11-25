@@ -5,8 +5,9 @@ import (
 	"xorm.io/builder"
 
 	// "encoding/json"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestQuery_Parse(t *testing.T) {
@@ -39,7 +40,8 @@ func TestQuery_Parse(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			q, err := Parse([]byte(tt.str))
+			q := NewQuery(1, nil)
+			err := q.Parse([]byte(tt.str))
 			tt.wantQuery(q, err)
 		})
 	}
@@ -200,7 +202,8 @@ func TestQuery_BuildSQL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			q, err := Parse([]byte(tt.queryJSON))
+			q := NewQuery(0, nil)
+			err := q.Parse([]byte(tt.queryJSON))
 			if err != nil {
 				t.Logf(err.Error())
 				assert.Contains(t, err.Error(), tt.wantErr)

@@ -4,9 +4,10 @@ import (
 	// "encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+
 	"github.com/everpan/idig/pkg/entity/meta"
 	"github.com/goccy/go-json"
-	"strings"
 	"xorm.io/builder"
 	"xorm.io/xorm"
 )
@@ -35,6 +36,10 @@ func NewQuery(tenantId uint32, engine *xorm.Engine) *Query {
 		From:     &From{},
 		engine:   engine,
 	}
+}
+
+func (q *Query) NewQuery() *Query {
+	return NewQuery(q.TenantId, q.engine)
 }
 
 func (q *Query) Parse(data []byte) error {

@@ -3,11 +3,12 @@ package meta
 import (
 	"encoding/json"
 	"fmt"
-	_ "github.com/mattn/go-sqlite3"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"reflect"
 	"testing"
+
+	_ "github.com/mattn/go-sqlite3"
+	"github.com/stretchr/testify/assert"
 	"xorm.io/xorm"
 	"xorm.io/xorm/schemas"
 )
@@ -155,7 +156,7 @@ func Test_queryAttrGroupFromDB(t *testing.T) {
 func Test_attachSchemaToMeta(t *testing.T) {
 	metaWithNotExistGroup := &Meta{
 		Entity:     meta.Entity,
-		AttrGroups: []*AttrGroup{&AttrGroup{AttrTable: "not_exist_table"}},
+		AttrGroups: []*AttrGroup{{AttrTable: "not_exist_table"}},
 	}
 	TableSchemasCache(engine)
 	tables := dsTableCache[DataSourceNameMd5(engine.DataSourceName())]
@@ -195,7 +196,7 @@ func TestGetMetaFromDB(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := GetMetaFromDBAndCached(tt.entityName, engine)
+			got, err := getMetaFromDBAndCached(tt.entityName, engine)
 			if err != nil {
 				assert.Contains(t, err.Error(), tt.metaJsonContain)
 			} else {
@@ -204,7 +205,7 @@ func TestGetMetaFromDB(t *testing.T) {
 				t.Log(string(jd))
 				assert.Contains(t, string(jd), tt.metaJsonContain)
 				// 查询成功并已经缓存
-				got2 := GetMetaFromCache(tt.entityName)
+				got2 := getMetaFromCache(tt.entityName)
 				assert.NotNil(t, got2)
 				assert.Equal(t, got, got2)
 			}

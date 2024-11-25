@@ -1,8 +1,9 @@
 package meta
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMeta_Marshal(t *testing.T) {
@@ -15,7 +16,7 @@ func TestMeta_Marshal(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m, err := GetMetaFromDBAndCached(tt.entityName, engine)
+			m, err := getMetaFromDBAndCached(tt.entityName, engine)
 			if err != nil {
 				t.Error(err)
 			}

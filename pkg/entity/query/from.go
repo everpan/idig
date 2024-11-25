@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+
 	"github.com/goccy/go-json"
 )
 
@@ -44,13 +45,14 @@ func parseFrom(data []byte) (*From, error) {
 			}
 		}
 	case map[string]any:
-		ea := EntityOrSubQuery{}
-		q2, err2 := Parse(data)
-		if err2 != nil {
-			return nil, err2
-		}
-		ea.Query = q2
-		f.EntityAlias = append(f.EntityAlias, &ea)
+		// ea := EntityOrSubQuery{}
+		// q2 := q.NewQuery()
+		// err2 := q2.Parse(data)
+		// if err2 != nil {
+		// 	return nil, err2
+		// }
+		// ea.Query = q2
+		// f.EntityAlias = append(f.EntityAlias, &ea)
 	default:
 		return nil, fmt.Errorf("unknown from type: %T", v)
 	}
