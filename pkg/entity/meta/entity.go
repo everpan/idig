@@ -6,7 +6,6 @@ import (
 	"github.com/everpan/idig/pkg/config"
 	"github.com/goccy/go-json"
 	"sync"
-	"xorm.io/builder"
 	"xorm.io/xorm"
 	"xorm.io/xorm/schemas"
 )
@@ -104,7 +103,20 @@ func TableSchemasCache(engine *xorm.Engine) error {
 	return nil
 }
 
-func GetMetaFromCache(entityName string) *Meta {
+func AcquireMeta(entity string, engine *xorm.Engine) (*Meta, error) {
+	m := getMetaFromCache(entity)
+	if m != nil {
+		return m, nil
+	}
+	var err error
+	m, err = getMetaFromDBAndCached(entity, engine)
+	if err != nil {
+		return nil, err
+	}
+	return m, err
+}
+
+func getMetaFromCache(entityName string) *Meta {
 	mux.RLocker()
 	defer mux.RLocker()
 	meta, ok := entityMetaCache[entityName]
@@ -114,7 +126,7 @@ func GetMetaFromCache(entityName string) *Meta {
 	return meta
 }
 
-func GetMetaFromDBAndCached(entityName string, engine *xorm.Engine) (*Meta, error) {
+func getMetaFromDBAndCached(entityName string, engine *xorm.Engine) (*Meta, error) {
 	e, err := queryEntityFromDB(entityName, engine)
 	if err != nil {
 		return nil, err
@@ -267,16 +279,4 @@ func (m *Meta) AttrGroupTableNameFromCols(cols []string) []string {
 		tables = append(tables, t)
 	}
 	return tables
-}
-
-func (m *Meta) JoinAttrsFromColumns(bld *builder.Builder, cols []string) *builder.Builder {
-	tables := m.AttrGroupTableNameFromCols(cols)
-	e := m.Entity
-	joinCond := fmt.Sprintf("%s.%s = %%s.%s", e.PkAttrTable, e.PkAttrField, e.PkAttrField)
-	bld.Select(cols...)
-	bld.From(e.PkAttrTable)
-	for _, t := range tables {
-		bld.LeftJoin(t, fmt.Sprintf(joinCond, t))
-	}
-	return bld
 }

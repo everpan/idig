@@ -195,7 +195,8 @@ func TestQuery_BuildSQL(t *testing.T) {
 			"SELECT * FROM test WHERE a=? AND a1<? OR a2 LIKE ?", ""},
 		{"limit", `{"select":["a"],"from":"t",
 "where":[{"col":"a","op":"eq","val":"a-v"}],
-"limit":{"offset":23}}`, "", ""},
+"limit":{"offset":23,"num":34}}`,
+			"SELECT * FROM test WHERE a=? LIMIT 34 OFFSET 23", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

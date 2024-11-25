@@ -4,9 +4,11 @@ import (
 	// "encoding/json"
 	"errors"
 	"fmt"
+	"github.com/everpan/idig/pkg/entity/meta"
 	"github.com/goccy/go-json"
 	"strings"
 	"xorm.io/builder"
+	"xorm.io/xorm"
 )
 
 type Query struct {
@@ -18,29 +20,32 @@ type Query struct {
 	Wheres      []*Where      `json:"where,omitempty"`
 	Orders      []*Order      `json:"order,omitempty"`
 	Limit       *Limit        `json:"limit,omitempty"`
+	TenantId    uint32        `json:"tenant_id,omitempty"`
+	engine      *xorm.Engine  `json:"-"`
 }
 
 type BuilderSQL interface {
 	BuildSQL(bld *builder.Builder) error
 }
 
-func NewQuery() *Query {
+func NewQuery(tenantId uint32, engine *xorm.Engine) *Query {
 	return &Query{
 		// Version: "1.0",
-		From: &From{},
+		TenantId: tenantId,
+		From:     &From{},
+		engine:   engine,
 	}
 }
 
-func Parse(data []byte) (*Query, error) {
-	q := NewQuery()
+func (q *Query) Parse(data []byte) error {
 	qSt := map[string]json.RawMessage{}
 	var err error
 	err = json.Unmarshal(data, &qSt)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if _, ok := qSt["select"]; !ok {
-		return nil, errors.New(fmt.Sprint("query does not contain select items"))
+		return errors.New(fmt.Sprint("query does not contain select items"))
 	}
 	if _, ok := qSt["alias"]; ok {
 		q.Alias = string(qSt["alias"])
@@ -53,14 +58,36 @@ func Parse(data []byte) (*Query, error) {
 	q.Limit, errs[4] = parseLimit(qSt["limit"])
 	for _, e := range errs {
 		if e != nil {
-			return nil, e
+			return e
 		}
 	}
-	return q, nil
+	return nil
+}
+
+func (q *Query) AcquireAllMetas() (map[string]*meta.Meta, error) {
+	var metas = map[string]*meta.Meta{}
+	for _, ea := range q.From.EntityAlias {
+		if ea.Query != nil {
+			ms, err := ea.Query.AcquireAllMetas()
+			if err != nil {
+				return nil, err
+			}
+			for _, m := range ms {
+				metas[m.Entity.EntityName] = m
+			}
+		} else {
+			m, err := meta.AcquireMeta(ea.Entity, q.engine)
+			if err != nil {
+				return nil, err
+			}
+			metas[m.Entity.EntityName] = m
+		}
+	}
+	return metas, nil
 }
 
 // BuildSQL 构建order/limit/where
-func (q *Query) BuildSQL(bld *builder.Builder) error {
+func (q *Query) buildCond(bld *builder.Builder) error {
 	var err error
 	if len(q.Wheres) > 0 {
 		for _, w := range q.Wheres {
@@ -79,7 +106,47 @@ func (q *Query) BuildSQL(bld *builder.Builder) error {
 	}
 	if q.Limit != nil {
 		bld.Limit(q.Limit.Num, q.Limit.Offset)
-		// num must gt 0
 	}
 	return nil
+}
+
+func (q *Query) BuildSQL(bld *builder.Builder) error {
+	metas, err := q.AcquireAllMetas()
+	if err != nil {
+		return err
+	}
+	for _, ea := range q.From.EntityAlias {
+		if ea.Query != nil {
+			err1 := ea.Query.BuildSQL(bld)
+			if err1 != nil {
+				return err1
+			}
+			return fmt.Errorf("sub query not impl")
+		} else {
+			if len(q.From.EntityAlias) > 0 {
+				return fmt.Errorf("multil-entites not impl")
+			}
+			entityName := q.From.EntityAlias[0].Entity
+			m := metas[entityName]
+			q.buildSelectItems(bld, m)
+			q.buildCond(bld)
+		}
+	}
+	return nil
+}
+
+func (q *Query) buildSelectItems(bld *builder.Builder, m *meta.Meta) *builder.Builder {
+	var cols []string
+	for _, item := range q.SelectItems {
+		cols = append(cols, item.Col)
+	}
+	tables := m.AttrGroupTableNameFromCols(cols)
+	e := m.Entity
+	joinCond := fmt.Sprintf("%s.%s = %%s.%s", e.PkAttrTable, e.PkAttrField, e.PkAttrField)
+	bld.Select(cols...)
+	bld.From(e.PkAttrTable)
+	for _, t := range tables {
+		bld.LeftJoin(t, fmt.Sprintf(joinCond, t))
+	}
+	return bld
 }
