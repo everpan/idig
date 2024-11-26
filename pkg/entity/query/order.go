@@ -3,12 +3,13 @@ package query
 import (
 	"errors"
 	"fmt"
+
 	"github.com/goccy/go-json"
 )
 
 type Order struct {
 	Col    string `json:"col"`
-	Option string `json:"option"`
+	Option string `json:"opt,omitempty"`
 }
 
 func parseOrder(data []byte) ([]*Order, error) {
@@ -37,7 +38,7 @@ func (o *Order) Verify() error {
 		return errors.New("order col is required")
 	}
 	if o.Option == "" {
-		return errors.New("order option is required")
+		o.Option = "asc"
 	}
 	if o.Option != "desc" && o.Option != "asc" {
 		return errors.New("order option must be 'desc' or 'asc'")
