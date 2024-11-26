@@ -53,6 +53,7 @@ func parseFrom(data []byte) (*From, error) {
 		// }
 		// ea.Query = q2
 		// f.EntityAlias = append(f.EntityAlias, &ea)
+		return nil, fmt.Errorf("not impl")
 	default:
 		return nil, fmt.Errorf("unknown from type: %T", v)
 	}

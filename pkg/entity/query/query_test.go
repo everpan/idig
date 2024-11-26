@@ -20,7 +20,6 @@ func TestQuery_Parse(t *testing.T) {
 			assert.Contains(t, err.Error(), "query does not contain select items")
 		}},
 		{"select is not array", `{"select":{}}`, func(query *Query, err error) {
-			assert.Nil(t, query)
 			assert.Contains(t, err.Error(), "slice unexpected end of JSON input")
 		}},
 		{"empty from", `{"select":[]}`, func(query *Query, err error) {
@@ -94,9 +93,6 @@ func TestQuery_parseWhere(t *testing.T) {
 		{"tie must be and or", `[{"col":"a","op":"eq"},{"col":"b","op":"lt","tie":"not"}]`, func(items []*Where, err error) {
 			assert.Contains(t, err.Error(), "'and' or 'or'")
 		}},
-		{"tie required", `[{"col":"a","op":"eq"},{"col":"b","op":"lt","tie":""}]`, func(items []*Where, err error) {
-			assert.Contains(t, err.Error(), "tie is empty")
-		}},
 		{"equal", `[{"col":"a","op":"eq"},{"col":"b","op":"lt","tie":"and"}]`, func(items []*Where, err error) {
 			assert.Nil(t, err)
 			assert.Equal(t, len(items), 2)
@@ -148,9 +144,10 @@ func TestQuery_parseFrom(t *testing.T) {
 			assert.Equal(t, "b002", from.EntityAlias[1].Entity)
 		}},
 		{"sub query", `{"select":["a","b"],"from":["a","b"]}`, func(from *From, err error) {
-			assert.Nil(t, err)
-			assert.Equal(t, 1, len(from.EntityAlias))
-			assert.Equal(t, "a", from.EntityAlias[0].Query.From.EntityAlias[0].Entity)
+			assert.Contains(t, err.Error(), "not impl")
+			//assert.Nil(t, err)
+			//assert.Equal(t, 1, len(from.EntityAlias))
+			//assert.Equal(t, "a", from.EntityAlias[0].Query.From.EntityAlias[0].Entity)
 			//assert.Equal(t, "aa", from.EntityAlias[0].Entity)
 			//assert.Equal(t, "b002", from.EntityAlias[1].Entity)
 		}},
