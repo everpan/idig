@@ -115,6 +115,22 @@ func (q *Query) buildCond(bld *builder.Builder) error {
 	return nil
 }
 
+func (q *Query) buildSelectItems(bld *builder.Builder, m *meta.Meta) *builder.Builder {
+	var cols []string
+	for _, item := range q.SelectItems {
+		cols = append(cols, item.Col)
+	}
+	tables := m.AttrGroupTableNameFromCols(cols)
+	e := m.Entity
+	joinCond := fmt.Sprintf("%s.%s = %%s.%s", e.PkAttrTable, e.PkAttrField, e.PkAttrField)
+	bld.Select(cols...)
+	bld.From(e.PkAttrTable)
+	for _, t := range tables {
+		bld.LeftJoin(t, fmt.Sprintf(joinCond, t))
+	}
+	return bld
+}
+
 func (q *Query) BuildSQL(bld *builder.Builder) error {
 	metas, err := q.AcquireAllMetas()
 	if err != nil {
@@ -138,20 +154,4 @@ func (q *Query) BuildSQL(bld *builder.Builder) error {
 		}
 	}
 	return nil
-}
-
-func (q *Query) buildSelectItems(bld *builder.Builder, m *meta.Meta) *builder.Builder {
-	var cols []string
-	for _, item := range q.SelectItems {
-		cols = append(cols, item.Col)
-	}
-	tables := m.AttrGroupTableNameFromCols(cols)
-	e := m.Entity
-	joinCond := fmt.Sprintf("%s.%s = %%s.%s", e.PkAttrTable, e.PkAttrField, e.PkAttrField)
-	bld.Select(cols...)
-	bld.From(e.PkAttrTable)
-	for _, t := range tables {
-		bld.LeftJoin(t, fmt.Sprintf(joinCond, t))
-	}
-	return bld
 }
