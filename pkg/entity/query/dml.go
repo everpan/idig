@@ -59,6 +59,8 @@ func (dmlVal *DmlValues) ParseValues(data []byte) error {
 		}
 		switch r := v.(type) {
 		case map[string]any:
+			// single value
+			dmlVal.acquireColumnKeyFromFirstValues(r)
 			tmp, err := parseSingleValue(dmlVal.cols, r)
 			if err != nil {
 				return fmt.Errorf("parse single value error:%s", err.Error())
@@ -67,6 +69,9 @@ func (dmlVal *DmlValues) ParseValues(data []byte) error {
 			}
 		case []map[string]any:
 			// multi-values
+			if len(r) > 0 {
+				dmlVal.acquireColumnKeyFromFirstValues(r[0])
+			}
 			dmlVal.values, err = parseMultiValues(dmlVal.cols, r)
 			if err != nil {
 				return fmt.Errorf("parse multi values error:%s", err.Error())
@@ -90,16 +95,14 @@ func (dmlVal *DmlValues) ParseValues(data []byte) error {
 	return nil
 }
 
+func (dmlVal *DmlValues) acquireColumnKeyFromFirstValues(mv map[string]any) {
+	for k := range mv {
+		dmlVal.cols = append(dmlVal.cols, k)
+	}
+}
+
 func parseSingleValue(colList []string, mv map[string]any) ([]any, error) {
 	var ret []any
-	if len(colList) == 0 {
-		// 首行处理
-		for c, v := range mv {
-			colList = append(colList, c)
-			ret = append(ret, v)
-		}
-		return ret, nil
-	}
 	for _, col := range colList {
 		v, ok := mv[col]
 		if !ok {
