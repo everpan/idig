@@ -220,7 +220,7 @@ func TestQuery_buildCond(t *testing.T) {
 				assert.Contains(t, err.Error(), tt.wantErr)
 			}
 			data, err := json.Marshal(q)
-			t.Logf("query %v : %v,args:%v", string(data), err, args)
+			t.Logf("query %v : %v,data:%v", string(data), err, args)
 			assert.Equal(t, tt.wantSQL, sql)
 		})
 	}
