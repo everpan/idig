@@ -24,7 +24,7 @@ func (c *Context) SendJSON(code int, msg string, data any) error {
 
 func (c *Context) SendBadRequestError(err error) error {
 	c.fb.Status(fiber.StatusBadRequest)
-	return c.SendJSON(-1, err.Error(), nil)
+	return c.SendJSON(-99, err.Error(), nil)
 }
 
 func (c *Context) SendSuccess(data any) error {

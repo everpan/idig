@@ -28,9 +28,10 @@ type AttrGroup struct {
 }
 
 type Meta struct {
-	Entity     *Entity                   `json:"entity"`
-	AttrGroups []*AttrGroup              `json:"attr_groups"`
-	AttrTables map[string]*schemas.Table `json:"attr_tables"`
+	Entity      *Entity                    `json:"entity"`
+	AttrGroups  []*AttrGroup               `json:"attr_groups"`
+	AttrTables  map[string]*schemas.Table  `json:"attr_tables"`
+	ColumnIndex map[string]*schemas.Column `json:"-"`
 }
 
 func (e *Entity) TableName() string {
@@ -211,7 +212,22 @@ func attachSchemaToMeta(m *Meta, tables map[string]*schemas.Table) error {
 		attrTable[g.AttrTable] = gt
 	}
 	m.AttrTables = attrTable
+	m.buildColumnsIndex()
 	return nil
+}
+
+func (m *Meta) buildColumnsIndex() {
+	m.ColumnIndex = make(map[string]*schemas.Column)
+	for tableName, schema := range m.AttrTables {
+		for _, col := range schema.Columns() {
+			col.TableName = tableName
+			if col.Name == m.Entity.PkAttrField && tableName != m.Entity.PkAttrTable {
+				// 属性表外键忽略
+				continue
+			}
+			m.ColumnIndex[col.Name] = col
+		}
+	}
 }
 
 func (m *Meta) Verify() error {
@@ -241,42 +257,27 @@ func (m *Meta) Verify() error {
 	return nil
 }
 
-// AttrGroupTableNameFromCols 通过列找到列所存在的属性表; 不包含主表 PkAttrTable
-func (m *Meta) AttrGroupTableNameFromCols(cols []string) []string {
+// GetAttrGroupTablesNameFromCols 通过列找到列所存在的属性表; 不包含主表 PkAttrTable
+func (m *Meta) GetAttrGroupTablesNameFromCols(cols []string) ([]string, error) {
 	var tables []string
-	if len(cols) == 0 {
-		cols = append(cols, "*")
-	}
+	tableSet := make(map[string]struct{})
 	if len(cols) == 1 && cols[0] == "*" {
 		for _, at := range m.AttrTables {
-			tables = append(tables, at.Name)
+			tableSet[at.Name] = struct{}{}
 		}
-		return tables
-	}
-	colTable := make(map[string]string)
-	for _, t := range m.AttrTables {
-		for _, c := range t.Columns() {
-			if t.Name != m.Entity.PkAttrTable && c.Name == m.Entity.PkAttrField {
-				continue
+	} else {
+		colIndex := m.ColumnIndex
+		for _, col := range cols {
+			colInfo, ok := colIndex[col]
+			if !ok {
+				return nil, fmt.Errorf("column '%s' not exist", col)
 			}
-			colTable[c.Name] = t.Name
+			tableSet[colInfo.TableName] = struct{}{}
 		}
 	}
-	type void struct{}
-	var empty = void{}
-	tableCol := make(map[string]void)
-
-	for _, col := range cols {
-		if t, ok := colTable[col]; !ok {
-			tableCol[t] = empty
-		}
-		if len(tableCol) == len(m.AttrTables) {
-			break //包含所有表，终止
-		}
-	}
-	delete(tableCol, m.Entity.PkAttrTable)
-	for t := range tableCol {
+	delete(tableSet, m.Entity.PkAttrTable)
+	for t := range tableSet {
 		tables = append(tables, t)
 	}
-	return tables
+	return tables, nil
 }

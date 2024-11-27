@@ -40,7 +40,9 @@ func (c *Context) Fiber() *fiber.Ctx {
 func (c *Context) Engine() *xorm.Engine {
 	return c.engine
 }
-
+func (c *Context) Tenant() *Tenant {
+	return c.tenant
+}
 func (c *Context) FromFiber(fb *fiber.Ctx) error {
 	c.fb = fb
 	tenantUid := fb.Get(TenantHeader, DefaultTenant.TenantUid)

@@ -32,8 +32,6 @@ func parseSelectItems(data []byte) ([]*SelectItem, error) {
 		switch iVal := item.(type) {
 		case string:
 			result = append(result, &SelectItem{Col: iVal})
-		//case []byte:
-		//	selectItem = append(selectItem, &SelectItem{Col: string(iVal)})
 		case map[string]any:
 			aItem := SelectItem{}
 			aItem.Col, _ = iVal["col"].(string)

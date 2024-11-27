@@ -115,12 +115,15 @@ func (q *Query) buildCond(bld *builder.Builder) error {
 	return nil
 }
 
-func (q *Query) buildSelectItems(bld *builder.Builder, m *meta.Meta) *builder.Builder {
+func (q *Query) buildSelectItems(bld *builder.Builder, m *meta.Meta) (*builder.Builder, error) {
 	var cols []string
 	for _, item := range q.SelectItems {
 		cols = append(cols, item.Col)
 	}
-	tables := m.AttrGroupTableNameFromCols(cols)
+	tables, err := m.GetAttrGroupTablesNameFromCols(cols)
+	if err != nil {
+		return nil, err
+	}
 	e := m.Entity
 	joinCond := fmt.Sprintf("%s.%s = %%s.%s", e.PkAttrTable, e.PkAttrField, e.PkAttrField)
 	bld.Select(cols...)
@@ -128,7 +131,7 @@ func (q *Query) buildSelectItems(bld *builder.Builder, m *meta.Meta) *builder.Bu
 	for _, t := range tables {
 		bld.LeftJoin(t, fmt.Sprintf(joinCond, t))
 	}
-	return bld
+	return bld, nil
 }
 
 func (q *Query) BuildSQL(bld *builder.Builder) error {
@@ -144,12 +147,15 @@ func (q *Query) BuildSQL(bld *builder.Builder) error {
 			}
 			return fmt.Errorf("sub query not impl")
 		} else {
-			if len(q.From.EntityAlias) > 0 {
+			if len(q.From.EntityAlias) > 1 {
 				return fmt.Errorf("multil-entites not impl")
 			}
 			entityName := q.From.EntityAlias[0].Entity
 			m := metas[entityName]
-			q.buildSelectItems(bld, m)
+			_, err2 := q.buildSelectItems(bld, m)
+			if err2 != nil {
+				return err2
+			}
 			q.buildCond(bld)
 		}
 	}
