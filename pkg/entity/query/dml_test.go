@@ -1,9 +1,10 @@
 package query
 
 import (
+	"testing"
+
 	"github.com/goccy/go-json"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func Test_arrayList(t *testing.T) {
@@ -25,12 +26,18 @@ func Test_parseValues(t *testing.T) {
 	}{
 		{"array values", `{"cols":["a","b"],"values":[["a1",2]]}`, func(values *DmlValues, err error) {
 			assert.Nil(t, err)
+			assert.Equal(t, 2, len(values.cols))
+			assert.Equal(t, 1, len(values.values))
+			assert.Equal(t, 2, len(values.values[0]))
+			assert.Equal(t, 2, int(values.values[0][1].(float64)))
 		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := parseValues([]byte(tt.data))
-			tt.want(nil, err)
+			dml := &DmlValues{}
+			dml.Reset()
+			err := dml.ParseValues([]byte(tt.data))
+			tt.want(dml, err)
 		})
 	}
 }

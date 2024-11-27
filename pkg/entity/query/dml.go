@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+
 	"github.com/goccy/go-json"
 )
 
@@ -32,8 +33,12 @@ type DmlValues struct {
 	values [][]any
 }
 
-func parseValues(data []byte) error {
-	dmlVal := &DmlValues{}
+func (dmlVal *DmlValues) Reset() {
+	dmlVal.cols = nil
+	dmlVal.values = nil
+}
+
+func (dmlVal *DmlValues) ParseValues(data []byte) error {
 	var (
 		raw map[string]any
 	)
@@ -43,33 +48,41 @@ func parseValues(data []byte) error {
 	}
 	for k, v := range raw {
 		if k == "cols" {
-			fmt.Printf("cols : %T %v\n", v, v)
-			//for _, s := range v.([]any) {
-			//	dmlVal.cols = append(dmlVal.cols, s.(string))
-			//}
-			// dmlVal.cols = v.([]string)
+			for _, v1 := range v.([]any) {
+				s, ok := v1.(string)
+				if !ok {
+					return fmt.Errorf("cols value '%v' type is '%T',need 'string' type", v1, v1)
+				}
+				dmlVal.cols = append(dmlVal.cols, s)
+			}
 			continue
 		}
-		fmt.Printf("%s : %T %v\n", k, v, v)
 		switch r := v.(type) {
 		case map[string]any:
-			tmp, err1 := parseSignalValue(dmlVal.cols, r)
-			if err1 != nil {
-				return err1
+			tmp, err := parseSingleValue(dmlVal.cols, r)
+			if err != nil {
+				return fmt.Errorf("parse single value error:%s", err.Error())
 			} else {
 				dmlVal.values = append(dmlVal.values, tmp)
 			}
 		case []map[string]any:
 			// multi-values
 			dmlVal.values, err = parseMultiValues(dmlVal.cols, r)
-		case [][]any:
-			dmlVal.values = r
+			if err != nil {
+				return fmt.Errorf("parse multi values error:%s", err.Error())
+			}
+		case []any:
+			for _, a := range r {
+				switch r1 := a.(type) {
+				case []any:
+					dmlVal.values = append(dmlVal.values, r1)
+				default:
+					return fmt.Errorf("parse multi values error:need array values,not %T", r1)
+				}
+			}
 		default:
-			return fmt.Errorf("invalid value type: %T", r)
+			return fmt.Errorf("parse values error:invalid value type: %T", r)
 		}
-	}
-	if err != nil {
-		return err
 	}
 	//for _, v := range values {
 	//	values = append(values, v)
@@ -77,7 +90,7 @@ func parseValues(data []byte) error {
 	return nil
 }
 
-func parseSignalValue(colList []string, mv map[string]any) ([]any, error) {
+func parseSingleValue(colList []string, mv map[string]any) ([]any, error) {
 	var ret []any
 	if len(colList) == 0 {
 		// 首行处理
@@ -100,7 +113,7 @@ func parseSignalValue(colList []string, mv map[string]any) ([]any, error) {
 func parseMultiValues(colList []string, mvs []map[string]any) ([][]any, error) {
 	var ret [][]any
 	for _, mv := range mvs {
-		r, err := parseSignalValue(colList, mv)
+		r, err := parseSingleValue(colList, mv)
 		if err != nil {
 			return nil, err
 		}
