@@ -3,8 +3,8 @@ package query
 import (
 	"errors"
 	"fmt"
-
 	"github.com/goccy/go-json"
+	"strings"
 )
 
 type Order struct {
@@ -22,6 +22,11 @@ func parseOrder(data []byte) ([]*Order, error) {
 		return nil, err
 	}
 	for _, o1 := range orders {
+		if o1.Option == "" {
+			o1.Option = "ASC"
+		} else {
+			o1.Option = strings.ToUpper(o1.Option)
+		}
 		err = o1.Verify()
 		if err != nil {
 			return nil, err
@@ -37,11 +42,8 @@ func (o *Order) Verify() error {
 	if o.Col == "" {
 		return errors.New("order col is required")
 	}
-	if o.Option == "" {
-		o.Option = "asc"
-	}
-	if o.Option != "desc" && o.Option != "asc" {
-		return errors.New("order option must be 'desc' or 'asc'")
+	if o.Option != "DESC" && o.Option != "ASC" {
+		return errors.New("order option must be 'D' or 'asc'")
 	}
 	return nil
 }

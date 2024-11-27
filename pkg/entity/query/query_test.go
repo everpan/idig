@@ -199,7 +199,7 @@ func TestQuery_buildCond(t *testing.T) {
 		{"order by", `{"select":["a"],"from":"t",
 "where":[{"col":"a","op":"eq","val":"a-v"}],
 "limit":{"offset":23,"num":34},"order":[{"col":"a","opt":"desc"},{"col":"b"}]}`,
-			"SELECT * FROM test WHERE a=? ORDER BY a desc,b asc LIMIT 34 OFFSET 23", ""},
+			"SELECT * FROM test WHERE a=? ORDER BY a DESC,b ASC LIMIT 34 OFFSET 23", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
