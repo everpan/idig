@@ -2,43 +2,45 @@ package query
 
 import (
 	"fmt"
+	"github.com/everpan/idig/pkg/entity/meta"
+	"xorm.io/builder"
 
 	"github.com/goccy/go-json"
 )
 
 /*
 	"cols":[],
-	"values":[
+	"vals":[
 		[],[]
 	]
 */
 /*
-	"values":{
-		"col-name":"values",
+	"vals":{
+		"col-name":"vals",
 		"enable":1,
 	}
 */
 /*
-	"values":[{
-		"col-name":"values",
+	"vals":[{
+		"col-name":"vals",
 		"enable":1,
 	},{
-		"col-name":"values",
+		"col-name":"vals",
 		"enable":1,
 	}]
 */
 
-type DmlValues struct {
-	cols   []string
-	values [][]any
+type ColumnValue struct { // data manager
+	cols []string
+	vals [][]any
 }
 
-func (dmlVal *DmlValues) Reset() {
-	dmlVal.cols = nil
-	dmlVal.values = nil
+func (cv *ColumnValue) Reset() {
+	cv.cols = nil
+	cv.vals = nil
 }
 
-func (dmlVal *DmlValues) ParseValues(data []byte) error {
+func (cv *ColumnValue) ParseValues(data []byte) error {
 	var (
 		raw map[string]any
 	)
@@ -55,53 +57,53 @@ func (dmlVal *DmlValues) ParseValues(data []byte) error {
 				if !ok {
 					return fmt.Errorf("cols value '%v' type is '%T',need 'string' type", v1, v1)
 				}
-				dmlVal.cols = append(dmlVal.cols, s)
+				cv.cols = append(cv.cols, s)
 			}
 			continue
 		}
 		switch r := v.(type) {
 		case map[string]any:
 			// single value
-			dmlVal.acquireColumnKeyFromFirstValues(r)
-			tmp, err1 := parseSingleValue(dmlVal.cols, r)
+			cv.acquireColumnKeyFromFirstValues(r)
+			tmp, err1 := parseSingleValue(cv.cols, r)
 			if err1 != nil {
 				return fmt.Errorf("parse single value error:%s", err1.Error())
 			} else {
-				dmlVal.values = append(dmlVal.values, tmp)
+				cv.vals = append(cv.vals, tmp)
 			}
 		case []any:
 			for i, a := range r {
 				switch r1 := a.(type) {
 				case []any:
-					dmlVal.values = append(dmlVal.values, r1)
+					cv.vals = append(cv.vals, r1)
 				case map[string]any:
-					// multi obj values
+					// multi obj vals
 					if i == 0 {
-						dmlVal.acquireColumnKeyFromFirstValues(r1)
+						cv.acquireColumnKeyFromFirstValues(r1)
 					}
-					tmp, err1 := parseSingleValue(dmlVal.cols, r1)
+					tmp, err1 := parseSingleValue(cv.cols, r1)
 					if err1 != nil {
 						return fmt.Errorf("parse single value error:%s", err1.Error())
 					} else {
-						dmlVal.values = append(dmlVal.values, tmp)
+						cv.vals = append(cv.vals, tmp)
 					}
 				default:
-					return fmt.Errorf("parse multi values error:need array values,not %T", r1)
+					return fmt.Errorf("parse multi vals error:need array vals,not %T", r1)
 				}
 			}
 		default:
-			return fmt.Errorf("parse values error:invalid value type: %T", r)
+			return fmt.Errorf("parse vals error:invalid value type: %T", r)
 		}
 	}
-	//for _, v := range values {
-	//	values = append(values, v)
+	//for _, v := range vals {
+	//	vals = append(vals, v)
 	//}
 	return nil
 }
 
-func (dmlVal *DmlValues) acquireColumnKeyFromFirstValues(mv map[string]any) {
+func (cv *ColumnValue) acquireColumnKeyFromFirstValues(mv map[string]any) {
 	for k := range mv {
-		dmlVal.cols = append(dmlVal.cols, k)
+		cv.cols = append(cv.cols, k)
 	}
 }
 
@@ -117,18 +119,43 @@ func parseSingleValue(colList []string, mv map[string]any) ([]any, error) {
 	return ret, nil
 }
 
-func parseMultiValues(colList []string, mvs []map[string]any) ([][]any, error) {
-	var ret [][]any
-	for _, mv := range mvs {
-		r, err := parseSingleValue(colList, mv)
-		if err != nil {
-			return nil, err
+func SubdivisionColumValueToTable(m *meta.Meta, cv *ColumnValue) (map[string]*ColumnValue, error) {
+	var ret = map[string]*ColumnValue{}
+	var colIdx = map[string]int{}
+	for i, col := range cv.cols {
+		if colMeta, ok := m.ColumnIndex[col]; ok {
+			if cv2, ok2 := ret[colMeta.TableName]; ok2 {
+				cv2.cols = append(cv2.cols, col)
+				// cv2.vals = append(cv2.vals)
+			} else {
+				cv2 = &ColumnValue{}
+				cv2.cols = append(cv2.cols, col)
+				ret[colMeta.TableName] = cv2
+			}
+			colIdx[col] = i
+		} else {
+			return nil, fmt.Errorf("column '%s' not found", col)
 		}
-		ret = append(ret, r)
+	}
+	// copy vals
+	for _, cv3 := range ret {
+		for _, sv := range cv.vals {
+			dv := make([]any, len(cv3.cols))
+			for i, col := range cv3.cols {
+				idx := colIdx[col]
+				dv[i] = sv[idx]
+			}
+			cv3.vals = append(cv3.vals, dv)
+		}
 	}
 	return ret, nil
 }
 
-//func parseArrayValues(colList []string, mvs [][]any) ([][]any, error) {
-//	return mvs,nil
-//}
+func (cv *ColumnValue) BuildInsertSQL(bld *builder.Builder, tName string) {
+	bld.Into(tName).Insert()
+	var eqs []any
+	for i, col := range cv.cols {
+		eqs = append(eqs, builder.Eq{col: cv.vals[0][i]})
+	}
+	bld.Insert(eqs...)
+}

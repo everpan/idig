@@ -77,7 +77,7 @@ func (w *Where) ToCond() (builder.Cond, error) {
 		if ok && len(bv) > 1 {
 			cond = builder.Between{Col: w.Col, LessVal: bv[0], MoreVal: bv[1]}
 		} else {
-			return nil, fmt.Errorf("between values must be arrary,and len gte two")
+			return nil, fmt.Errorf("between vals must be arrary,and len gte two")
 		}
 	}
 	return cond, nil
