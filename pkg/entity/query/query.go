@@ -93,14 +93,9 @@ func (q *Query) AcquireAllMetas() (map[string]*meta.Meta, error) {
 
 // BuildSQL 构建order/limit/where
 func (q *Query) buildCond(bld *builder.Builder) error {
-	var err error
-	if len(q.Wheres) > 0 {
-		for _, w := range q.Wheres {
-			err = w.BuildSQL(bld)
-			if err != nil {
-				return err
-			}
-		}
+	err := BuildWheresSQL(bld, q.Wheres)
+	if err != nil {
+		return err
 	}
 	if q.Orders != nil {
 		var os []string

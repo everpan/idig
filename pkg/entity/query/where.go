@@ -44,6 +44,19 @@ func (w *Where) BuildSQL(bld *builder.Builder) error {
 	return nil
 }
 
+func BuildWheresSQL(bld *builder.Builder, wheres []*Where) error {
+	if len(wheres) > 0 {
+		var err error
+		for _, w := range wheres {
+			err = w.BuildSQL(bld)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (w *Where) ToCond() (builder.Cond, error) {
 	var cond builder.Cond
 	switch w.Op {
@@ -82,6 +95,7 @@ func (w *Where) ToCond() (builder.Cond, error) {
 	}
 	return cond, nil
 }
+
 func (w *Where) Verify() error {
 	if w == nil {
 		return errors.New("where is nil")
