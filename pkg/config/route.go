@@ -13,7 +13,7 @@ func RegisterRouter(routes []*IDigRoute) {
 }
 
 func apply(router fiber.Router, routes []*IDigRoute) {
-	for _, route := range allRoute {
+	for _, route := range routes {
 		if route.Children != nil {
 			r := router.Group(route.Path)
 			apply(r, route.Children)
@@ -30,6 +30,7 @@ func apply(router fiber.Router, routes []*IDigRoute) {
 		}
 	}
 }
+
 func Use(app *fiber.App) {
 	router := app.Group("/api/v1")
 	apply(router, allRoute)

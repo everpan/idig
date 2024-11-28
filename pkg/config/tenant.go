@@ -2,14 +2,15 @@ package config
 
 import (
 	"fmt"
-	"github.com/spf13/viper"
 	"sync"
+
+	"github.com/spf13/viper"
 	"xorm.io/xorm"
 )
 
 type Tenant struct {
-	TenantId    uint32 `json:"tenant_id" xorm:"pk autoincr"`
-	TenantUid   string `json:"tenant_uid" xorm:"unique"` //uuid
+	TenantId    uint32 `json:"tenant_idx" xorm:"pk autoincr"` //tenant_id 参与自动过滤
+	TenantUid   string `json:"tenant_uid" xorm:"unique"`      //uuid
 	Name        string `json:"name"`
 	CnName      string `json:"cn_name"`
 	Driver      string `json:"driver"`
