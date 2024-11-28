@@ -159,16 +159,3 @@ func (cv *ColumnValue) BuildInsertSQL(bld *builder.Builder, tName string) {
 	}
 	bld.Insert(eqs...)
 }
-
-func (cv *ColumnValue) BuildUpdateSQL(bld *builder.Builder, tName string, wheres []*Where) error {
-	err := BuildWheresSQL(bld, wheres)
-	if err != nil {
-		return err
-	}
-	var eqs []any
-	for i, col := range cv.cols {
-		eqs = append(eqs, builder.Eq{col: cv.vals[0][i]})
-	}
-	// todo bld.Update(eqs...)
-	return nil
-}
