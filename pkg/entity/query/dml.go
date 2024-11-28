@@ -46,7 +46,9 @@ func (dmlVal *DmlValues) ParseValues(data []byte) error {
 	if err != nil {
 		return err
 	}
+
 	for k, v := range raw {
+		fmt.Printf("key %s, raw type %T\n", k, v)
 		if k == "cols" {
 			for _, v1 := range v.([]any) {
 				s, ok := v1.(string)
@@ -61,26 +63,28 @@ func (dmlVal *DmlValues) ParseValues(data []byte) error {
 		case map[string]any:
 			// single value
 			dmlVal.acquireColumnKeyFromFirstValues(r)
-			tmp, err := parseSingleValue(dmlVal.cols, r)
-			if err != nil {
-				return fmt.Errorf("parse single value error:%s", err.Error())
+			tmp, err1 := parseSingleValue(dmlVal.cols, r)
+			if err1 != nil {
+				return fmt.Errorf("parse single value error:%s", err1.Error())
 			} else {
 				dmlVal.values = append(dmlVal.values, tmp)
 			}
-		case []map[string]any:
-			// multi-values
-			if len(r) > 0 {
-				dmlVal.acquireColumnKeyFromFirstValues(r[0])
-			}
-			dmlVal.values, err = parseMultiValues(dmlVal.cols, r)
-			if err != nil {
-				return fmt.Errorf("parse multi values error:%s", err.Error())
-			}
 		case []any:
-			for _, a := range r {
+			for i, a := range r {
 				switch r1 := a.(type) {
 				case []any:
 					dmlVal.values = append(dmlVal.values, r1)
+				case map[string]any:
+					// multi obj values
+					if i == 0 {
+						dmlVal.acquireColumnKeyFromFirstValues(r1)
+					}
+					tmp, err1 := parseSingleValue(dmlVal.cols, r1)
+					if err1 != nil {
+						return fmt.Errorf("parse single value error:%s", err1.Error())
+					} else {
+						dmlVal.values = append(dmlVal.values, tmp)
+					}
 				default:
 					return fmt.Errorf("parse multi values error:need array values,not %T", r1)
 				}
