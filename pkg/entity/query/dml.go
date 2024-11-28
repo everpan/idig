@@ -35,9 +35,25 @@ type ColumnValue struct { // data manager
 	vals [][]any
 }
 
+func (cv *ColumnValue) Values() [][]any {
+	return cv.vals
+}
 func (cv *ColumnValue) Reset() {
 	cv.cols = nil
 	cv.vals = nil
+}
+
+func (cv *ColumnValue) Valid() error {
+	if cv.cols == nil {
+		return fmt.Errorf("invalid column")
+	}
+	if cv.vals == nil {
+		return fmt.Errorf("invalid value")
+	}
+	if len(cv.cols) != len(cv.vals[0]) {
+		return fmt.Errorf("column length must be equal value length")
+	}
+	return nil
 }
 
 func (cv *ColumnValue) ParseValues(data []byte) error {
@@ -120,6 +136,10 @@ func parseSingleValue(colList []string, mv map[string]any) ([]any, error) {
 }
 
 func SubdivisionColumValueToTable(m *meta.Meta, cv *ColumnValue) (map[string]*ColumnValue, error) {
+	err := cv.Valid()
+	if err != nil {
+		return nil, err
+	}
 	var ret = map[string]*ColumnValue{}
 	var colIdx = map[string]int{}
 	for i, col := range cv.cols {
@@ -158,4 +178,21 @@ func (cv *ColumnValue) BuildInsertSQL(bld *builder.Builder, tName string) {
 		eqs = append(eqs, builder.Eq{col: cv.vals[0][i]})
 	}
 	bld.Insert(eqs...)
+}
+
+func (cv *ColumnValue) BuildUpdateSQL(bld *builder.Builder, tName string, wheres []*Where) error {
+	if wheres == nil || len(wheres) == 0 {
+		return fmt.Errorf("wheres is empty,can't empty when update")
+	}
+	err := BuildWheresSQL(bld, wheres)
+	if err != nil {
+		return err
+	}
+	var eqs []builder.Cond
+	for i, col := range cv.cols {
+		eqs = append(eqs, builder.Eq{col: cv.vals[0][i]})
+	}
+	// todo more cond, reuse where ?
+	bld.Update(eqs...).From(tName)
+	return nil
 }
