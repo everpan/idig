@@ -8,11 +8,15 @@ import (
 )
 
 type Where struct {
-	Col string `json:"col"`
+	Col string `json:"col,omitempty"`
 	Op  string `json:"op,omitempty"` // operate
 	Val any    `json:"val,omitempty"`
 	Tie string `json:"tie,omitempty"` // 与上一个where的接连方式
 	// SubWhere []*Where `json:"where,omitempty"` // 子条件
+}
+
+type Wheres struct {
+	wheres []*Where
 }
 
 func parseWhere(data []byte) ([]*Where, error) {
@@ -132,7 +136,7 @@ func (w *Where) ToCond() (builder.Cond, error) {
 		if ok && len(bv) > 1 {
 			cond = builder.Between{Col: w.Col, LessVal: bv[0], MoreVal: bv[1]}
 		} else {
-			return nil, fmt.Errorf("between vals must be arrary,and len gte two")
+			return nil, fmt.Errorf("between vals must be array,and len gte two")
 		}
 	}
 	return cond, nil

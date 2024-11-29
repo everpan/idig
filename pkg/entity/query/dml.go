@@ -31,16 +31,27 @@ import (
 */
 
 type ColumnValue struct { // data manager
-	cols []string
-	vals [][]any
+	name   string // entity name or table name
+	cols   []string
+	vals   [][]any
+	pkName string
+	pkVal  any
 }
 
 func (cv *ColumnValue) Values() [][]any {
 	return cv.vals
 }
 func (cv *ColumnValue) Reset() {
+	cv.name = ""
 	cv.cols = nil
 	cv.vals = nil
+	cv.pkName = ""
+	cv.pkVal = nil
+}
+
+func (cv *ColumnValue) SetPk(pkName string, pkVal any) {
+	cv.pkName = pkName
+	cv.pkVal = pkVal
 }
 
 func (cv *ColumnValue) Valid() error {
@@ -81,8 +92,7 @@ func (cv *ColumnValue) ParseValues(data []byte) error {
 		case map[string]any:
 			// single value
 			cv.acquireColumnKeyFromFirstValues(r)
-			tmp, err1 := parseSingleValue(cv.cols, r)
-			if err1 != nil {
+			if tmp, err1 := parseSingleValue(cv.cols, r); err1 != nil {
 				return fmt.Errorf("parse single value error:%s", err1.Error())
 			} else {
 				cv.vals = append(cv.vals, tmp)
@@ -97,8 +107,7 @@ func (cv *ColumnValue) ParseValues(data []byte) error {
 					if i == 0 {
 						cv.acquireColumnKeyFromFirstValues(r1)
 					}
-					tmp, err1 := parseSingleValue(cv.cols, r1)
-					if err1 != nil {
+					if tmp, err1 := parseSingleValue(cv.cols, r1); err1 != nil {
 						return fmt.Errorf("parse single value error:%s", err1.Error())
 					} else {
 						cv.vals = append(cv.vals, tmp)
@@ -149,6 +158,7 @@ func SubdivisionColumValueToTable(m *meta.Meta, cv *ColumnValue) (map[string]*Co
 				// cv2.vals = append(cv2.vals)
 			} else {
 				cv2 = &ColumnValue{}
+				cv2.name = colMeta.TableName
 				cv2.cols = append(cv2.cols, col)
 				ret[colMeta.TableName] = cv2
 			}
@@ -171,16 +181,19 @@ func SubdivisionColumValueToTable(m *meta.Meta, cv *ColumnValue) (map[string]*Co
 	return ret, nil
 }
 
-func (cv *ColumnValue) BuildInsertSQL(bld *builder.Builder, tName string) {
-	bld.Into(tName)
+func (cv *ColumnValue) BuildInsertSQL(bld *builder.Builder) {
+	bld.Into(cv.name)
 	var eqs []any
+	if cv.pkVal != nil {
+		eqs = append(eqs, builder.Eq{cv.pkName: cv.pkVal})
+	}
 	for i, col := range cv.cols {
 		eqs = append(eqs, builder.Eq{col: cv.vals[0][i]})
 	}
 	bld.Insert(eqs...)
 }
 
-func (cv *ColumnValue) BuildUpdateSQL(bld *builder.Builder, tName string, wheres []*Where) error {
+func (cv *ColumnValue) BuildUpdateSQL(bld *builder.Builder, wheres []*Where) error {
 	if wheres == nil || len(wheres) == 0 {
 		return fmt.Errorf("wheres is empty,can't empty when update")
 	}
@@ -193,6 +206,6 @@ func (cv *ColumnValue) BuildUpdateSQL(bld *builder.Builder, tName string, wheres
 		eqs = append(eqs, builder.Eq{col: cv.vals[0][i]})
 	}
 	// todo more cond, reuse where ?
-	bld.Update(eqs...).From(tName)
+	bld.Update(eqs...).From(cv.name)
 	return nil
 }
