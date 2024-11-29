@@ -8,11 +8,11 @@ import (
 )
 
 type Where struct {
-	Col      string   `json:"col"`
-	Op       string   `json:"op"` // operate
-	Val      any      `json:"val"`
-	Tie      string   `json:"tie,omitempty"`   // 与上一个where的接连方式
-	SubWhere []*Where `json:"where,omitempty"` // 子条件
+	Col string `json:"col"`
+	Op  string `json:"op,omitempty"` // operate
+	Val any    `json:"val,omitempty"`
+	Tie string `json:"tie,omitempty"` // 与上一个where的接连方式
+	// SubWhere []*Where `json:"where,omitempty"` // 子条件
 }
 
 func parseWhere(data []byte) ([]*Where, error) {
@@ -29,6 +29,42 @@ func parseWhere(data []byte) ([]*Where, error) {
 		return nil, err
 	}
 	return result, nil
+}
+
+func (w *Where) parseExpr() error {
+	if w.Op != "expr" {
+		return fmt.Errorf("invalid expression operator '%s'", w.Op)
+	}
+	if w.Val == nil {
+		return fmt.Errorf(`value is null,expert {sql:"",args:[]}`)
+	}
+	_, ok := w.Val.(*builder.Expression)
+	if ok {
+		// 已经是表达式格式，毋需解析，保持幂等
+		return nil
+	}
+	v, ok := w.Val.(map[string]any)
+	if !ok {
+		return errors.New(`invalid expr value,must be {sql:"",args:[]}`)
+	}
+	sqlAny, ok := v["sql"]
+	if !ok {
+		return errors.New(`invalid expr,has no 'sql' value`)
+	}
+	sql, ok := sqlAny.(string)
+	if !ok {
+		return fmt.Errorf(`invalid expr.sql type,need string,but is %T`, sqlAny)
+	}
+	argsAny, ok := v["args"]
+	if !ok {
+		return errors.New(`invalid expr,has no 'args' value`)
+	}
+	args, ok := argsAny.([]any)
+	if !ok {
+		return fmt.Errorf("invalid expr.args type,need *[]any,but is %T", argsAny)
+	}
+	w.Val = builder.Expr(sql, args...)
+	return nil
 }
 
 func (w *Where) BuildSQL(bld *builder.Builder) error {
@@ -59,6 +95,9 @@ func BuildWheresSQL(bld *builder.Builder, wheres []*Where) error {
 
 func (w *Where) ToCond() (builder.Cond, error) {
 	var cond builder.Cond
+	if w.Op == "" {
+		return builder.Eq{w.Col: w.Val}, nil
+	}
 	switch w.Op {
 	case "eq":
 		cond = builder.Eq{w.Col: w.Val}
@@ -79,8 +118,11 @@ func (w *Where) ToCond() (builder.Cond, error) {
 	case "notin":
 		cond = builder.NotIn(w.Col, w.Val)
 	case "expr":
-		// cond = builder.Expr(w.Col, w.Val)
-		return nil, fmt.Errorf("expr not impl")
+		err := w.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+		cond = w.Val.(*builder.Expression)
 	case "isnull":
 		cond = builder.IsNull{w.Col}
 	case "notnull":
@@ -108,9 +150,11 @@ func (w *Where) Verify() error {
 	if w.Col == "" {
 		return errors.New("where col is required")
 	}
-	if w.Op == "" {
-		return errors.New("where op is required")
-	}
+	//if w.Op != "isnull" && w.Op != "notnull" {
+	//	if w.Val == nil {
+	//		return errors.New("where val is required")
+	//	}
+	//}
 	return nil
 }
 
@@ -130,12 +174,14 @@ func VerifyWhere(ws []*Where) error {
 		if err != nil {
 			return err
 		}
-		if w.SubWhere != nil {
-			err = VerifyWhere(w.SubWhere)
-			if err != nil {
-				return err
+		/*
+			if w.SubWhere != nil {
+					err = VerifyWhere(w.SubWhere)
+				if err != nil {
+					return err
+				}
 			}
-		}
+		*/
 	}
 	return nil
 }
