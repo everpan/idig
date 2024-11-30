@@ -9,7 +9,7 @@ import (
 )
 
 type Tenant struct {
-	TenantId    uint32 `json:"tenant_idx" xorm:"pk autoincr"` //tenant_id 参与自动过滤
+	TenantIdx   uint32 `json:"tenant_idx" xorm:"pk autoincr"` //tenant_id 参与自动过滤
 	TenantUid   string `json:"tenant_uid" xorm:"unique"`      //uuid
 	Name        string `json:"name"`
 	CnName      string `json:"cn_name"`
@@ -52,7 +52,7 @@ func ReloadTenantConfig() error {
 
 var (
 	DefaultTenant = &Tenant{
-		TenantId:   1,
+		TenantIdx:  1,
 		TenantUid:  "69515562-5192-49aa-b223-b0953d83c887",
 		Name:       "default",
 		CnName:     "默认租户",

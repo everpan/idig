@@ -3,6 +3,7 @@ package handler
 import (
 	"github.com/everpan/idig/pkg/config"
 	"github.com/everpan/idig/pkg/core"
+	_ "github.com/everpan/idig/pkg/entity"
 	"github.com/everpan/idig/pkg/entity/meta"
 	"github.com/stretchr/testify/assert"
 	"io"
@@ -28,9 +29,9 @@ func Test_getMeta(t *testing.T) {
 		wantStr  string
 	}{
 		{"fetch_not_exist", "not-exist", 400,
-			`{"code":-1,"msg":"entity 'not-exist' not found"}`},
+			`{"code":-99,"msg":"entity 'not-exist' not found"}`},
 		{"not-attr-entity", "not-attr-entity", 400, "entry 'not-attr-entity' not found"},
-		{"tenant", "tenant", 200, `"primary_keys":["entity_idx"]`},
+		{"tenant", "tenant", 200, `"primary_keys":["tenant_idx"]`},
 		{"entity_relation", "entity_relation", 200, `"primary_keys":["relation_idx"]`},
 	}
 	for _, tt := range tests {

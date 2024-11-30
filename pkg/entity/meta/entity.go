@@ -53,7 +53,7 @@ func InitEntityTable(engine *xorm.Engine) error {
 	}
 	_, _ = RegisterEntity(engine, "entity", "实体信息", (&Entity{}).TableName(), "entity_id")
 	_, _ = RegisterEntity(engine, "entity_attr_group", "实体属性组信息", (&AttrGroup{}).TableName(), "group_idx")
-	_, _ = RegisterEntity(engine, "tenant", "租户信息", (&config.Tenant{}).TableName(), "tenant_id")
+	_, _ = RegisterEntity(engine, "tenant", "租户信息", (&config.Tenant{}).TableName(), "tenant_idx")
 	return err
 }
 

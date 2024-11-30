@@ -48,7 +48,7 @@ func queryPost(ctx *config.Context) error {
 // queryData 从query的dsl中，通过entity 查询数据
 func queryData(ctx *config.Context, data []byte) error {
 	tenant := ctx.Tenant()
-	q := query.NewQuery(tenant.TenantId, ctx.Engine())
+	q := query.NewQuery(tenant.TenantIdx, ctx.Engine())
 	err := q.Parse(data)
 	if err != nil {
 		return ctx.SendBadRequestError(err)
