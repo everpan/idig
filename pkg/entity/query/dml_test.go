@@ -2,11 +2,12 @@ package query
 
 import (
 	"github.com/everpan/idig/pkg/entity/meta"
+	"github.com/goccy/go-json"
 	"testing"
 	"xorm.io/builder"
 	"xorm.io/xorm/schemas"
 
-	"github.com/goccy/go-json"
+	// "encoding/json"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -27,47 +28,68 @@ func Test_parseValues(t *testing.T) {
 		data string
 		want func(values *ColumnValue, err error)
 	}{
-		{"array vals", `{"cols":["a","b"],"vals":[["a1",2]]}`, func(values *ColumnValue, err error) {
+		{"array vals,null pk", `{"cols":["pk","a","b"],"vals":[[null,"a1",2]]}`, func(cv *ColumnValue, err error) {
 			assert.Nil(t, err)
-			assert.Equal(t, 2, len(values.cols))
-			assert.Equal(t, 1, len(values.vals))
-			assert.Equal(t, 2, len(values.vals[0]))
-			assert.Equal(t, 2, int(values.vals[0][1].(float64)))
+			cv.tableName = "test"
+			cv.pkNum = 1
+			assert.Equal(t, 3, len(cv.cols))
+			assert.Equal(t, 1, len(cv.vals))
+			assert.Equal(t, 3, len(cv.vals[0]))
+			assert.Equal(t, 2, int(cv.vals[0][2].(float64)))
 			bld := builder.Dialect("sqlite3")
-			values.BuildInsertSQL(bld, "test")
+			cv.BuildInsertSQLWithoutPk(bld)
 			sql, _, _ := bld.ToSQL()
 			assert.Equal(t, "INSERT INTO test (a,b) Values (?,?)", sql)
 			sql2, _ := bld.ToBoundSQL()
 			assert.Equal(t, "INSERT INTO test (a,b) Values ('a1',2)", sql2)
+			bld2 := builder.Dialect("sqlite3")
+			cv.BuildInsertSQLWithPk(bld2)
+			sql, _, _ = bld2.ToSQL()
+			assert.Equal(t, "INSERT INTO test (a,b,pk) Values (?,?,null)", sql)
 		}},
-		{"array vals", `{"cols":["a","b"],"vals":[["a1",2],["a1",29]]}`, func(values *ColumnValue, err error) {
+		{"array vals,not null pk", `{"cols":["pk","a","b"],"vals":[[3,"a1",2]]}`, func(cv *ColumnValue, err error) {
 			assert.Nil(t, err)
-			assert.Equal(t, 2, len(values.cols))
-			assert.Equal(t, 2, len(values.vals))
-			assert.Equal(t, 2, len(values.vals[0]))
-			assert.Equal(t, 29, int(values.vals[1][1].(float64)))
+			cv.tableName = "test"
+			cv.pkNum = 1
+			assert.Equal(t, 3, len(cv.cols))
+			assert.Equal(t, 1, len(cv.vals))
+			assert.Equal(t, 3, len(cv.vals[0]))
+			assert.Equal(t, 2, int(cv.vals[0][2].(float64)))
+			bld := builder.Dialect("sqlite3")
+			cv.BuildInsertSQLWithPk(bld)
+			sql, _, _ := bld.ToSQL()
+			assert.Equal(t, "INSERT INTO test (a,b,pk) Values (?,?,?)", sql)
+			sql2, _ := bld.ToBoundSQL()
+			assert.Equal(t, "INSERT INTO test (a,b,pk) Values ('a1',2,3)", sql2)
 		}},
-		{"single", `{"vals":{"a":"va","b":31,"c":"vc"}}`, func(values *ColumnValue, err error) {
+		{"array vals", `{"cols":["a","b"],"vals":[["a1",2],["a1",29]]}`, func(cv *ColumnValue, err error) {
 			assert.Nil(t, err)
-			assert.Equal(t, 1, len(values.vals))
-			assert.Equal(t, 3, len(values.vals[0]))
-			assert.Equal(t, 3, len(values.cols))
-			t.Logf("cols: %v\n", values.cols)
-			for i, k := range values.cols {
+			assert.Equal(t, 2, len(cv.cols))
+			assert.Equal(t, 2, len(cv.vals))
+			assert.Equal(t, 2, len(cv.vals[0]))
+			assert.Equal(t, 29, int(cv.vals[1][1].(float64)))
+		}},
+		{"single", `{"vals":{"a":"va","b":31,"c":"vc"}}`, func(cv *ColumnValue, err error) {
+			assert.Nil(t, err)
+			assert.Equal(t, 1, len(cv.vals))
+			assert.Equal(t, 3, len(cv.vals[0]))
+			assert.Equal(t, 3, len(cv.cols))
+			t.Logf("cols: %v\n", cv.cols)
+			for i, k := range cv.cols {
 				if k == "b" {
-					assert.Equal(t, 31, int(values.vals[0][i].(float64)))
+					assert.Equal(t, 31, int(cv.vals[0][i].(float64)))
 				}
 			}
 		}},
-		{"multi vals", `{"vals":[{"a":"va","b":31,"c":"vc"},{"a":"va","b":32,"c":"vc"}]}`, func(values *ColumnValue, err error) {
+		{"multi vals", `{"vals":[{"a":"va","b":31,"c":"vc"},{"a":"va","b":32,"c":"vc"}]}`, func(cv *ColumnValue, err error) {
 			assert.Nil(t, err)
-			assert.Equal(t, 2, len(values.vals))
-			assert.Equal(t, 3, len(values.vals[0]))
-			assert.Equal(t, 3, len(values.cols))
-			t.Logf("cols: %v\n", values.cols)
-			for i, k := range values.cols {
+			assert.Equal(t, 2, len(cv.vals))
+			assert.Equal(t, 3, len(cv.vals[0]))
+			assert.Equal(t, 3, len(cv.cols))
+			t.Logf("cols: %v\n", cv.cols)
+			for i, k := range cv.cols {
 				if k == "b" {
-					assert.Equal(t, 31, int(values.vals[0][i].(float64)))
+					assert.Equal(t, 31, int(cv.vals[0][i].(float64)))
 				}
 			}
 		}},
@@ -86,16 +108,19 @@ func TestSubdivisionColumValueToTable(t *testing.T) {
 	var (
 		m = &meta.Meta{
 			ColumnIndex: map[string]*schemas.Column{
-				"a": {TableName: "t1"},
-				"b": {TableName: "t1"},
-				"c": {TableName: "t2"},
-				"d": {TableName: "t3"},
-				"e": {TableName: "t2"},
-				"f": {TableName: "t4"},
+				"pk": {TableName: "t0"},
+				"a":  {TableName: "t1"},
+				"b":  {TableName: "t1"},
+				"c":  {TableName: "t2"},
+				"d":  {TableName: "t3"},
+				"e":  {TableName: "t2"},
+				"f":  {TableName: "t4"},
 			},
+			Entity: &meta.Entity{PkAttrField: "pk"},
 		}
 		cv = &ColumnValue{
 			cols: []string{"a", "b", "c", "d", "e"},
+			vals: [][]any{{1, 2, 3, 4, 5}},
 		}
 		cv2 = &ColumnValue{
 			cols: []string{"a", "b", "c", "d", "e"},
@@ -112,16 +137,14 @@ func TestSubdivisionColumValueToTable(t *testing.T) {
 	}{
 		{"none", m, cv, func(ret map[string]*ColumnValue, err error) {
 			assert.Nil(t, err)
-			t.Logf("ret %v", ret)
-			assert.Equal(t, 3, len(ret))
-			t.Logf("ret %v", ret["t1"].vals)
-			assert.Equal(t, 0, len(ret["t1"].vals))
+			assert.Equalf(t, 3, len(ret), "%v", ret)
+			assert.Equal(t, 1, ret["t1"].vals[0][1])
 		}},
 		{"3 vals", m, cv2, func(ret map[string]*ColumnValue, err error) {
 			assert.Nil(t, err)
 			assert.Equal(t, 3, len(ret["t1"].vals))
-			assert.Equal(t, 2, len(ret["t1"].vals[0]))
-			assert.Equal(t, "222", ret["t1"].vals[2][1].(string))
+			assert.Equal(t, 3, len(ret["t1"].vals[0]))
+			assert.Equal(t, "222", ret["t1"].vals[2][2].(string))
 		}},
 	}
 	for _, tt := range tests {

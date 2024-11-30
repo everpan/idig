@@ -281,3 +281,11 @@ func (m *Meta) GetAttrGroupTablesNameFromCols(cols []string) ([]string, error) {
 	}
 	return tables, nil
 }
+
+func (m *Meta) PrimaryTable() string {
+	return m.Entity.PkAttrTable
+}
+
+func (m *Meta) IsPrimaryTable(table string) bool {
+	return m.PrimaryTable() == table
+}

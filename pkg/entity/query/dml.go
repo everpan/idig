@@ -1,11 +1,11 @@
 package query
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/everpan/idig/pkg/entity/meta"
 	"xorm.io/builder"
-
-	"github.com/goccy/go-json"
+	//"github.com/goccy/go-json"
 )
 
 /*
@@ -29,40 +29,51 @@ import (
 		"enable":1,
 	}]
 */
-
 type ColumnValue struct { // data manager
-	name   string // entity name or table name
-	cols   []string
-	vals   [][]any
-	pkName string
-	pkVal  any
+	tableName string // entity name or table name
+	pkNum     int    // first pkNum cols is pk
+	cols      []string
+	vals      [][]any
 }
 
 func (cv *ColumnValue) Values() [][]any {
 	return cv.vals
 }
+
 func (cv *ColumnValue) Reset() {
-	cv.name = ""
+	cv.tableName = ""
 	cv.cols = nil
 	cv.vals = nil
-	cv.pkName = ""
-	cv.pkVal = nil
 }
 
-func (cv *ColumnValue) SetPk(pkName string, pkVal any) {
-	cv.pkName = pkName
-	cv.pkVal = pkVal
+func (cv *ColumnValue) DetectValueStart() int {
+	if cv.vals == nil {
+		return -1
+	}
+	if cv.pkNum < 0 {
+		return -1
+	}
+	if cv.pkNum == 0 {
+		return 0
+	}
+	if cv.vals[0] == nil {
+		return -1
+	}
+	if cv.vals[0][cv.pkNum-1] == nil {
+		return cv.pkNum
+	}
+	return -1
 }
 
 func (cv *ColumnValue) Valid() error {
 	if cv.cols == nil {
-		return fmt.Errorf("invalid column")
+		return fmt.Errorf("ColumnValue invalid column")
 	}
 	if cv.vals == nil {
-		return fmt.Errorf("invalid value")
+		return fmt.Errorf("ColumnValue invalid value")
 	}
 	if len(cv.cols) != len(cv.vals[0]) {
-		return fmt.Errorf("column length must be equal value length")
+		return fmt.Errorf("ColumnValue column length must be equal value length")
 	}
 	return nil
 }
@@ -77,7 +88,6 @@ func (cv *ColumnValue) ParseValues(data []byte) error {
 	}
 
 	for k, v := range raw {
-		fmt.Printf("key %s, raw type %T\n", k, v)
 		if k == "cols" {
 			for _, v1 := range v.([]any) {
 				s, ok := v1.(string)
@@ -145,21 +155,25 @@ func parseSingleValue(colList []string, mv map[string]any) ([]any, error) {
 }
 
 func SubdivisionColumValueToTable(m *meta.Meta, cv *ColumnValue) (map[string]*ColumnValue, error) {
-	err := cv.Valid()
-	if err != nil {
+	if err := cv.Valid(); err != nil {
 		return nil, err
 	}
 	var ret = map[string]*ColumnValue{}
 	var colIdx = map[string]int{}
+	var pkIdx = -1
 	for i, col := range cv.cols {
+		if col == m.Entity.PkAttrField {
+			pkIdx = i
+		}
 		if colMeta, ok := m.ColumnIndex[col]; ok {
 			if cv2, ok2 := ret[colMeta.TableName]; ok2 {
 				cv2.cols = append(cv2.cols, col)
-				// cv2.vals = append(cv2.vals)
 			} else {
-				cv2 = &ColumnValue{}
-				cv2.name = colMeta.TableName
-				cv2.cols = append(cv2.cols, col)
+				cv2 = &ColumnValue{
+					tableName: colMeta.TableName,
+					pkNum:     1,
+					cols:      []string{m.Entity.PkAttrField, col},
+				}
 				ret[colMeta.TableName] = cv2
 			}
 			colIdx[col] = i
@@ -171,9 +185,12 @@ func SubdivisionColumValueToTable(m *meta.Meta, cv *ColumnValue) (map[string]*Co
 	for _, cv3 := range ret {
 		for _, sv := range cv.vals {
 			dv := make([]any, len(cv3.cols))
-			for i, col := range cv3.cols {
+			if pkIdx > -1 {
+				dv[0] = sv[pkIdx]
+			}
+			for i, col := range cv3.cols[1:] {
 				idx := colIdx[col]
-				dv[i] = sv[idx]
+				dv[1+i] = sv[idx]
 			}
 			cv3.vals = append(cv3.vals, dv)
 		}
@@ -181,14 +198,25 @@ func SubdivisionColumValueToTable(m *meta.Meta, cv *ColumnValue) (map[string]*Co
 	return ret, nil
 }
 
-func (cv *ColumnValue) BuildInsertSQL(bld *builder.Builder) {
-	bld.Into(cv.name)
+// BuildInsertSQLWithPk 构建insert语句
+func (cv *ColumnValue) BuildInsertSQLWithPk(bld *builder.Builder) {
+	cv.BuildInsertSQLOffset(bld, 0)
+}
+
+// BuildInsertSQLWithoutPk 构建的语句中不包含pk的值，通常自增主键不需要
+func (cv *ColumnValue) BuildInsertSQLWithoutPk(bld *builder.Builder) {
+	cv.BuildInsertSQLOffset(bld, cv.pkNum)
+}
+
+func (cv *ColumnValue) BuildInsertSQLOffset(bld *builder.Builder, off int) {
+	bld.Into(cv.tableName)
 	var eqs []any
-	if cv.pkVal != nil {
-		eqs = append(eqs, builder.Eq{cv.pkName: cv.pkVal})
+	if off < 0 {
+		off = 0
 	}
-	for i, col := range cv.cols {
-		eqs = append(eqs, builder.Eq{col: cv.vals[0][i]})
+	vals := cv.vals[0][off:]
+	for i, col := range cv.cols[off:] {
+		eqs = append(eqs, builder.Eq{col: vals[i]})
 	}
 	bld.Insert(eqs...)
 }
@@ -206,6 +234,20 @@ func (cv *ColumnValue) BuildUpdateSQL(bld *builder.Builder, wheres []*Where) err
 		eqs = append(eqs, builder.Eq{col: cv.vals[0][i]})
 	}
 	// todo more cond, reuse where ?
-	bld.Update(eqs...).From(cv.name)
+	bld.Update(eqs...).From(cv.tableName)
 	return nil
+}
+
+func (cv *ColumnValue) CopyPkValues(pk *ColumnValue) {
+	if cv.pkNum <= 0 {
+		return
+	}
+	if cv.tableName == pk.tableName {
+		return
+	}
+	for i, v := range cv.vals {
+		for j := 0; j < pk.pkNum; i++ {
+			v[j] = pk.vals[i][j]
+		}
+	}
 }
