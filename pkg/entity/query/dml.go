@@ -1,11 +1,10 @@
 package query
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/everpan/idig/pkg/entity/meta"
+	"github.com/goccy/go-json"
 	"xorm.io/builder"
-	//"github.com/goccy/go-json"
 )
 
 /*
@@ -32,37 +31,19 @@ import (
 type ColumnValue struct { // data manager
 	tableName string // entity name or table name
 	pkNum     int    // first pkNum cols is pk
+	tenantId  uint32
 	cols      []string
 	vals      [][]any
 }
 
-func (cv *ColumnValue) Values() [][]any {
-	return cv.vals
+func (cv *ColumnValue) SetPkVal(row int, v any) {
+	cv.vals[row][0] = v
 }
 
 func (cv *ColumnValue) Reset() {
 	cv.tableName = ""
 	cv.cols = nil
 	cv.vals = nil
-}
-
-func (cv *ColumnValue) DetectValueStart() int {
-	if cv.vals == nil {
-		return -1
-	}
-	if cv.pkNum < 0 {
-		return -1
-	}
-	if cv.pkNum == 0 {
-		return 0
-	}
-	if cv.vals[0] == nil {
-		return -1
-	}
-	if cv.vals[0][cv.pkNum-1] == nil {
-		return cv.pkNum
-	}
-	return -1
 }
 
 func (cv *ColumnValue) Valid() error {
@@ -181,7 +162,7 @@ func SubdivisionColumValueToTable(m *meta.Meta, cv *ColumnValue) (map[string]*Co
 			return nil, fmt.Errorf("column '%s' not found", col)
 		}
 	}
-	// copy vals
+
 	for _, cv3 := range ret {
 		for _, sv := range cv.vals {
 			dv := make([]any, len(cv3.cols))
@@ -199,26 +180,30 @@ func SubdivisionColumValueToTable(m *meta.Meta, cv *ColumnValue) (map[string]*Co
 }
 
 // BuildInsertSQLWithPk 构建insert语句
-func (cv *ColumnValue) BuildInsertSQLWithPk(bld *builder.Builder) {
-	cv.BuildInsertSQLOffset(bld, 0)
+func (cv *ColumnValue) BuildInsertSQLWithPk(bld *builder.Builder, rowId int) error {
+	return cv.BuildInsertSQLOffset(bld, 0, rowId)
 }
 
 // BuildInsertSQLWithoutPk 构建的语句中不包含pk的值，通常自增主键不需要
-func (cv *ColumnValue) BuildInsertSQLWithoutPk(bld *builder.Builder) {
-	cv.BuildInsertSQLOffset(bld, cv.pkNum)
+func (cv *ColumnValue) BuildInsertSQLWithoutPk(bld *builder.Builder, rowId int) error {
+	return cv.BuildInsertSQLOffset(bld, cv.pkNum, rowId)
 }
 
-func (cv *ColumnValue) BuildInsertSQLOffset(bld *builder.Builder, off int) {
+func (cv *ColumnValue) BuildInsertSQLOffset(bld *builder.Builder, colOff int, rowId int) error {
+	if rowId >= len(cv.vals) {
+		return fmt.Errorf("row id out of range")
+	}
 	bld.Into(cv.tableName)
 	var eqs []any
-	if off < 0 {
-		off = 0
+	if colOff < 0 {
+		colOff = 0
 	}
-	vals := cv.vals[0][off:]
-	for i, col := range cv.cols[off:] {
+	vals := cv.vals[rowId][colOff:]
+	for i, col := range cv.cols[colOff:] {
 		eqs = append(eqs, builder.Eq{col: vals[i]})
 	}
 	bld.Insert(eqs...)
+	return nil
 }
 
 func (cv *ColumnValue) BuildUpdateSQL(bld *builder.Builder, wheres []*Where) error {
@@ -250,4 +235,8 @@ func (cv *ColumnValue) CopyPkValues(pk *ColumnValue) {
 			v[j] = pk.vals[i][j]
 		}
 	}
+}
+
+func (cv *ColumnValue) RowCount() int {
+	return len(cv.vals)
 }

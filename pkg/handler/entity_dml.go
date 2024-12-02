@@ -90,29 +90,47 @@ func UpdateColumnValuePkValue(tableCv map[string]*query.ColumnValue, pk *query.C
 }
 
 func InsertEntityPk(dialect string, sess *xorm.Session, pkCv *query.ColumnValue) error {
-	bld := builder.Dialect(dialect)
-	pkCv.BuildInsertSQLWithoutPk(bld)
-	return ExecInsert(bld, pkCv, sess)
-}
-
-func InsertEntityAttrValues(dialect string, sess *xorm.Session, cv *query.ColumnValue) error {
-	bld := builder.Dialect(dialect)
-	cv.BuildInsertSQLWithPk(bld)
-	return ExecInsert(bld, cv, sess)
-}
-
-func ExecInsert(bld *builder.Builder, cv *query.ColumnValue, sess *xorm.Session) error {
-	sqlStr, _, err := bld.ToSQL()
-	if err != nil {
-		return err
-	}
-	for _, v := range cv.Values() {
-		eArgs := make([]any, 0, len(v)+1)
-		eArgs = append(eArgs, sqlStr)
-		eArgs = append(eArgs, v...)
-		if _, err1 := sess.Exec(eArgs...); err1 != nil {
-			return err1
+	rowCnt := pkCv.RowCount()
+	for i := 0; i < rowCnt; i++ {
+		bld := builder.Dialect(dialect)
+		if err := pkCv.BuildInsertSQLWithoutPk(bld, i); err != nil {
+			return err
+		}
+		if id, err := ExecInsert(bld, sess); err != nil {
+			return err
+		} else {
+			pkCv.SetPkVal(i, id)
 		}
 	}
 	return nil
+}
+
+func InsertEntityAttrValues(dialect string, sess *xorm.Session, cv *query.ColumnValue) error {
+	rowCnt := cv.RowCount()
+	for i := 0; i < rowCnt; i++ {
+		bld := builder.Dialect(dialect)
+		cv.BuildInsertSQLWithPk(bld, i)
+		_, err := ExecInsert(bld, sess)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func ExecInsert(bld *builder.Builder, sess *xorm.Session) (int64, error) {
+	// 因builder库，处理插入的过程中对列进行了排序，带来了应用复杂，后续优化
+	sqlStr, args, err := bld.ToSQL()
+	if err != nil {
+		return 0, err
+	}
+	eArgs := make([]interface{}, len(args)+1)
+	eArgs = append(eArgs, sqlStr)
+	eArgs = append(eArgs, args...)
+	if ret, err1 := sess.Exec(eArgs...); err1 != nil {
+		return 0, err1
+	} else {
+		return ret.LastInsertId()
+	}
+	return 0, nil
 }
