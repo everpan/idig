@@ -16,6 +16,11 @@ var dmlRoutes = []*config.IDigRoute{
 		Handler: dmlInsert,
 		Method:  fiber.MethodPost,
 	},
+	{
+		Path:    "/entity/dm/:entity?", // data query
+		Handler: dmlUpdate,
+		Method:  fiber.MethodPut,
+	},
 }
 
 func init() {
@@ -23,6 +28,12 @@ func init() {
 }
 
 func dmlInsert(ctx *config.Context) error {
+	return dmlAction(ctx, 1)
+}
+func dmlUpdate(ctx *config.Context) error {
+	return dmlAction(ctx, 2)
+}
+func dmlAction(ctx *config.Context, method int) error {
 	fb := ctx.Fiber()
 	data := fb.Body()
 	entityName := fb.Params("entity")
@@ -47,14 +58,14 @@ func dmlInsert(ctx *config.Context) error {
 	if tableCV == nil {
 		return ctx.SendBadRequestError(fmt.Errorf("request can't paser entity value"))
 	}
-	err2 := InsertEntityTx(engine, tableCV, m)
-	if err2 != nil {
-		return ctx.SendJSON(-1, "exec sql error", err2.Error())
+	err = InsertUpdateEntityTx(engine, tableCV, m, method)
+	if err != nil {
+		return ctx.SendJSON(-1, "exec sql error", err.Error())
 	}
-	return ctx.SendSuccess("insert ok")
+	return ctx.SendSuccess("ok")
 }
 
-func InsertEntityTx(engine *xorm.Engine, tableCV map[string]*query.ColumnValue, m *meta.Meta) error {
+func InsertUpdateEntityTx(engine *xorm.Engine, tableCV map[string]*query.ColumnValue, m *meta.Meta, method int) error {
 	sess := engine.NewSession()
 	defer func(sess *xorm.Session) {
 		_ = sess.Close()
@@ -68,17 +79,23 @@ func InsertEntityTx(engine *xorm.Engine, tableCV map[string]*query.ColumnValue, 
 		return fmt.Errorf("can't find primary table for entity %s", m.Entity.PkAttrTable)
 	}
 	var dialect = engine.DriverName()
-	if err = InsertEntityPk(dialect, sess, pkTable); err != nil {
-		_ = sess.Rollback()
-		return err
-	}
-	delete(tableCV, m.Entity.PkAttrTable)
-	UpdateColumnValuePkValue(tableCV, pkTable)
-	for _, cv2 := range tableCV {
-		if err2 := InsertEntityAttrValues(dialect, sess, cv2); err2 != nil {
+	if method == 1 {
+		if err = InsertEntityPk(dialect, sess, pkTable); err != nil {
 			_ = sess.Rollback()
-			return err2
+			return err
 		}
+		delete(tableCV, m.Entity.PkAttrTable)
+		UpdateColumnValuePkValue(tableCV, pkTable)
+		for _, cv2 := range tableCV {
+			if err2 := InsertEntityAttrValues(dialect, sess, cv2); err2 != nil {
+				_ = sess.Rollback()
+				return err2
+			}
+		}
+	} else if method == 2 {
+
+	} else {
+		return fmt.Errorf("unsupported method: %d", method)
 	}
 	return sess.Commit()
 }

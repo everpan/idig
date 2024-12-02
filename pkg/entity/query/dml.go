@@ -34,6 +34,7 @@ type ColumnValue struct { // data manager
 	tenantId  uint32
 	cols      []string
 	vals      [][]any
+	wheres    []*Where
 }
 
 func (cv *ColumnValue) SetPkVal(row int, v any) {
@@ -76,6 +77,15 @@ func (cv *ColumnValue) ParseValues(data []byte) error {
 					return fmt.Errorf("cols value '%v' type is '%T',need 'string' type", v1, v1)
 				}
 				cv.cols = append(cv.cols, s)
+			}
+			continue
+		} else if k == "where" { //update
+			var tmp map[string]json.RawMessage
+			if err = json.Unmarshal(data, &tmp); err != nil {
+				return err
+			}
+			if cv.wheres, err = parseWhere(tmp["where"]); err != nil {
+				return err
 			}
 			continue
 		}
@@ -176,6 +186,16 @@ func SubdivisionColumValueToTable(m *meta.Meta, cv *ColumnValue) (map[string]*Co
 			cv3.vals = append(cv3.vals, dv)
 		}
 	}
+	// subdivision where
+	if cv.wheres != nil {
+		for _, w := range cv.wheres {
+			if colMeta, ok := m.ColumnIndex[w.Col]; ok {
+				cvRet := ret[colMeta.TableName]
+				cvRet.wheres = append(cvRet.wheres, w)
+			}
+		}
+	}
+
 	return ret, nil
 }
 
@@ -206,19 +226,20 @@ func (cv *ColumnValue) BuildInsertSQLOffset(bld *builder.Builder, colOff int, ro
 	return nil
 }
 
-func (cv *ColumnValue) BuildUpdateSQL(bld *builder.Builder, wheres []*Where) error {
-	if wheres == nil || len(wheres) == 0 {
-		return fmt.Errorf("wheres is empty,can't empty when update")
+func (cv *ColumnValue) BuildUpdateSQL(bld *builder.Builder, wheres []*Where, rowId int) error {
+	if cv.vals[rowId][0] != nil {
+		bld.Where(builder.Expr(cv.cols[0], cv.vals[rowId][0]))
 	}
 	err := BuildWheresSQL(bld, wheres)
 	if err != nil {
 		return err
 	}
 	var eqs []builder.Cond
-	for i, col := range cv.cols {
-		eqs = append(eqs, builder.Eq{col: cv.vals[0][i]})
+	cols := cv.cols[cv.pkNum:0]
+	vals := cv.vals[cv.pkNum:0]
+	for i, col := range cols {
+		eqs = append(eqs, builder.Eq{col: vals[rowId][i]})
 	}
-	// todo more cond, reuse where ?
 	bld.Update(eqs...).From(cv.tableName)
 	return nil
 }
