@@ -25,17 +25,16 @@ func (dt *DataTable) ParseValues(data []byte) error {
 	if err != nil {
 		return err
 	}
-	for k, v := range raw {
-		if k == "cols" {
-			for _, v1 := range v.([]any) {
-				s, ok := v1.(string)
-				if !ok {
-					return fmt.Errorf("cols value '%v' type is '%T',need 'string' type", v1, v1)
-				}
-				dt.AddColumn(s)
+	if v, ok := raw["cols"]; ok {
+		for _, v1 := range v.([]any) {
+			s, ok := v1.(string)
+			if !ok {
+				return fmt.Errorf("cols value '%v' type is '%T',need 'string' type", v1, v1)
 			}
-			continue
+			dt.AddColumn(s)
 		}
+	}
+	if v, ok := raw["vals"]; ok {
 		switch r := v.(type) {
 		case map[string]any:
 			// single value
