@@ -16,15 +16,7 @@ type DataTable struct {
 func NewDataTable() *DataTable {
 	return &DataTable{}
 }
-
-func (dt *DataTable) ParseValues(data []byte) error {
-	var (
-		raw map[string]any
-	)
-	err := json.Unmarshal(data, &raw)
-	if err != nil {
-		return err
-	}
+func (dt *DataTable) ParseKeyCols(raw map[string]any) error {
 	if v, ok := raw["cols"]; ok {
 		for _, v1 := range v.([]any) {
 			s, ok := v1.(string)
@@ -34,6 +26,10 @@ func (dt *DataTable) ParseValues(data []byte) error {
 			dt.AddColumn(s)
 		}
 	}
+	return nil
+}
+func (dt *DataTable) ParseKeyVals(raw map[string]any) error {
+	var err error
 	if v, ok := raw["vals"]; ok {
 		switch r := v.(type) {
 		case map[string]any:
@@ -73,9 +69,19 @@ func (dt *DataTable) ParseValues(data []byte) error {
 			return fmt.Errorf("parse vals error:invalid value type: %T", r)
 		}
 	}
-	//for _, v := range vals {
-	//	vals = append(vals, v)
-	//}
+	return nil
+}
+func (dt *DataTable) ParseValues(data []byte) error {
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if err := dt.ParseKeyCols(raw); err != nil {
+		return err
+	}
+	if err := dt.ParseKeyVals(raw); err != nil {
+		return err
+	}
 	return nil
 }
 

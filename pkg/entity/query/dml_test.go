@@ -76,7 +76,7 @@ func Test_parseValues(t *testing.T) {
 			dt := cv.DataTable()
 			assert.Equal(t, 3, len(dt.Columns()))
 			assert.Equal(t, 3, len(dt.Values()[0]))
-			t.Logf("cols: %v\n", dt.Columns())
+			// t.Logf("cols: %v\n", dt.Columns())
 			for i, k := range dt.Columns() {
 				if k == "b" {
 					assert.Equal(t, 31, int(dt.Values()[0][i].(float64)))
