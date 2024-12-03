@@ -167,7 +167,7 @@ func Test_attachSchemaToMeta(t *testing.T) {
 		wantErr       bool
 		wantErrString string
 	}{
-		{"no attr groups", &EntityMeta{}, nil, true, "meta.Entity is nil"},
+		{"no attr groups", &EntityMeta{}, nil, true, "EntityMeta is nil"},
 		{"no attr tables", meta, nil, true, "no attr tables"},
 		{"no attr tables", meta, dsTableCache["empty"], true, "no attr tables"},
 		{"normal", meta, tables, false, ""},

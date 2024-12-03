@@ -194,7 +194,7 @@ func queryAttrGroupFromDB(entityId uint32, engine *xorm.Engine) ([]*AttrGroup, e
 
 func attachSchemaToMeta(m *EntityMeta, tables map[string]*schemas.Table) error {
 	if m.Entity == nil {
-		return fmt.Errorf("m.Entity is nil")
+		return fmt.Errorf("EntityMeta is nil")
 	}
 	gs := m.AttrGroups
 	if gs == nil || len(gs) == 0 {
