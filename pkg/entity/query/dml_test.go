@@ -106,7 +106,7 @@ func TestSubdivisionColumValueToTable(t *testing.T) {
 				"e":  {TableName: "t2"},
 				"f":  {TableName: "t4"},
 			},
-			Entity: &meta.Entity{PkAttrField: "pk"},
+			Entity: &meta.Entity{PkAttrColumn: "pk"},
 		}
 		cv = &ColumnValue{
 			cols: []string{"a", "b", "c", "d", "e"},

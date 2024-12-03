@@ -11,12 +11,12 @@ import (
 )
 
 type Entity struct {
-	EntityIdx   uint32 `json:"entity_idx" xorm:"pk autoincr"`
-	EntityName  string `json:"entity_name" xorm:"unique"`
-	Description string `json:"desc" xorm:"desc_str"`
-	PkAttrTable string `json:"pk_attr_table"`
-	PkAttrField string `json:"pk_attr_field"`
-	Status      int    `json:"status"` // 1-normal 2-del,name is updated to {name-del},because is unique
+	EntityIdx    uint32 `json:"entity_idx" xorm:"pk autoincr"`
+	EntityName   string `json:"entity_name" xorm:"unique"`
+	Description  string `json:"desc" xorm:"desc_str"`
+	PkAttrTable  string `json:"pk_attr_table"`
+	PkAttrColumn string `json:"pk_attr_column"`
+	Status       int    `json:"status"` // 1-normal 2-del,name is updated to {name-del},because is unique
 }
 
 type AttrGroup struct {
@@ -69,11 +69,11 @@ var (
 
 func RegisterEntity(engine *xorm.Engine, name, desc, pkAttrTable, pkAttrField string) (int64, error) {
 	e := &Entity{
-		EntityName:  name,
-		Description: desc,
-		PkAttrTable: pkAttrTable,
-		PkAttrField: pkAttrField,
-		Status:      1,
+		EntityName:   name,
+		Description:  desc,
+		PkAttrTable:  pkAttrTable,
+		PkAttrColumn: pkAttrField,
+		Status:       1,
 	}
 	return engine.Insert(e)
 }
@@ -221,7 +221,7 @@ func (m *EntityMeta) buildColumnsIndex() {
 	for tableName, schema := range m.AttrTables {
 		for _, col := range schema.Columns() {
 			col.TableName = tableName
-			if col.Name == m.Entity.PkAttrField && tableName != m.Entity.PkAttrTable {
+			if col.Name == m.Entity.PkAttrColumn && tableName != m.Entity.PkAttrTable {
 				// 属性表外键忽略
 				continue
 			}
@@ -284,6 +284,10 @@ func (m *EntityMeta) GetAttrGroupTablesNameFromCols(cols []string) ([]string, er
 
 func (m *EntityMeta) PrimaryTable() string {
 	return m.Entity.PkAttrTable
+}
+
+func (m *EntityMeta) PrimaryColumn() string {
+	return m.Entity.PkAttrColumn
 }
 
 func (m *EntityMeta) IsPrimaryTable(table string) bool {

@@ -120,7 +120,7 @@ func (q *Query) buildSelectItems(bld *builder.Builder, m *meta.EntityMeta) (*bui
 		return nil, err
 	}
 	e := m.Entity
-	joinCond := fmt.Sprintf("%s.%s = %%s.%s", e.PkAttrTable, e.PkAttrField, e.PkAttrField)
+	joinCond := fmt.Sprintf("%s.%s = %%s.%s", e.PkAttrTable, e.PkAttrColumn, e.PkAttrColumn)
 	bld.Select(cols...)
 	bld.From(e.PkAttrTable)
 	for _, t := range tables {

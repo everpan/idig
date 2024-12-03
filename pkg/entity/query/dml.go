@@ -49,7 +49,7 @@ func (cv *ColumnValue) ParseValues(data []byte) error {
 }
 
 func DivisionColumnsToTable(m *meta.EntityMeta, cols []string) (map[string][]string, error) {
-	pkIdx := slices.Index(cols, m.Entity.PkAttrField)
+	pkIdx := slices.Index(cols, m.Entity.PkAttrColumn)
 	var ret = map[string][]string{}
 	for _, col := range cols {
 		if m1, ok := m.ColumnIndex[col]; ok {
@@ -58,7 +58,7 @@ func DivisionColumnsToTable(m *meta.EntityMeta, cols []string) (map[string][]str
 			} else {
 				cols2 := make([]string, 0)
 				if pkIdx >= 0 { // 原始列中的pk，分布到各个表
-					cols2 = append(cols2, m.Entity.PkAttrField)
+					cols2 = append(cols2, m.Entity.PkAttrColumn)
 				}
 				cols2 = append(cols2, col)
 				ret[m1.TableName] = cols2

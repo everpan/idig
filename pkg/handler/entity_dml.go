@@ -29,7 +29,19 @@ func init() {
 
 // dmlUpdate 多值update,自动寻找 pk uk
 func dmlUpdate(ctx *config.Context) error {
-	// return dmlAction(ctx, 2)
+	// 1. 根据pk更新
+	// 2. 根据其中一个uk更新
+	entityName, cv, err := parseToColumnValue(ctx)
+	if err != nil {
+		return ctx.SendBadRequestError(err)
+	}
+	engine := ctx.Engine()
+	m, err := meta.AcquireMeta(entityName, engine)
+	if err != nil {
+		return ctx.SendBadRequestError(err)
+	}
+	m.PrimaryTable()
+	cv.DataTable()
 	return nil
 }
 
@@ -44,19 +56,20 @@ func dmlInsert(ctx *config.Context) error {
 		return ctx.SendJSON(-1, "acquire meta error", err.Error())
 	}
 	dt := cv.DataTable()
-	pkId := dt.FetchColumnIndex(m.Entity.PkAttrField)
+	pkColumn := m.PrimaryColumn()
+	pkId := dt.FetchColumnIndex(pkColumn)
 	hasAutoIncrement := m.HasAutoIncrement()
 	if !hasAutoIncrement && pkId < 0 {
 		// 非自增表，无主键，不能插入
 		return ctx.SendBadRequestError(fmt.Errorf("primary key required"))
 	}
-	dt.AddColumn(m.Entity.PkAttrField) // 增加主键，参与分组
+	dt.AddColumn(pkColumn) // 增加主键，参与分组
 	tableCols, err := dt.DivisionColumnsToTable(m)
 	if err != nil {
 		return ctx.SendJSON(-1, "can't division entity to attrs groups", err.Error())
 	}
 	// insert pk table
-	pkTable := m.Entity.PkAttrTable
+	pkTable := m.PrimaryTable()
 	pkCols, ok := tableCols[pkTable]
 	if !ok {
 		return ctx.SendJSON(-1, "no values for primary table", nil)
@@ -64,7 +77,7 @@ func dmlInsert(ctx *config.Context) error {
 	if hasAutoIncrement {
 		// 自增表，不需要赋值主键，移除
 		pkCols = slices.DeleteFunc(pkCols, func(s string) bool {
-			return s == m.Entity.PkAttrField
+			return s == pkColumn
 		})
 	}
 	sess := engine.NewSession()
@@ -75,7 +88,7 @@ func dmlInsert(ctx *config.Context) error {
 	if err2 != nil {
 		return ctx.SendJSON(-1, "insert data error", err2.Error())
 	}
-	delete(tableCols, m.Entity.PkAttrField)
+	delete(tableCols, pkColumn)
 	for table, cols := range tableCols {
 		_, err = InsertData(engine, sess, table, cols, dt, false, 0)
 		if err != nil {

@@ -50,7 +50,7 @@ func createSeedData() {
 	}
 	engine.Sync2(new(UserDepartment))
 
-	e1 := &Entity{EntityName: "user", PkAttrTable: "user", PkAttrField: "user_idx", Status: 1}
+	e1 := &Entity{EntityName: "user", PkAttrTable: "user", PkAttrColumn: "user_idx", Status: 1}
 	_, err := engine.Insert(e1)
 	if err != nil {
 		panic(err)
@@ -61,7 +61,7 @@ func createSeedData() {
 	g2 := &AttrGroup{EntityIdx: e1.EntityIdx, AttrTable: "user_department"}
 	engine.Insert(g2)
 	// disabled entity
-	e2 := &Entity{EntityName: "user01", PkAttrTable: "user01", PkAttrField: "user_idx", Status: 0}
+	e2 := &Entity{EntityName: "user01", PkAttrTable: "user01", PkAttrColumn: "user_idx", Status: 0}
 	engine.Insert(e2)
 
 	// meta

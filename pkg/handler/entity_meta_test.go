@@ -15,10 +15,10 @@ import (
 func Test_getMeta(t *testing.T) {
 	app := core.CreateApp()
 	noAttEntity := &meta.Entity{
-		EntityName:  "not-attr-entity",
-		PkAttrTable: "not-attr-entity",
-		PkAttrField: "not-attr-entity",
-		Status:      1,
+		EntityName:   "not-attr-entity",
+		PkAttrTable:  "not-attr-entity",
+		PkAttrColumn: "not-attr-entity",
+		Status:       1,
 	}
 	engine, _ := config.GetEngine(config.DefaultTenant.Driver, config.DefaultTenant.DataSource)
 	_, _ = engine.Insert(noAttEntity)
