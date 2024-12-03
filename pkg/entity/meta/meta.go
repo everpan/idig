@@ -27,7 +27,7 @@ type AttrGroup struct {
 	Description string `json:"desc" xorm:"desc_str"`
 }
 
-type Meta struct {
+type EntityMeta struct {
 	Entity      *Entity                    `json:"entity"`
 	AttrGroups  []*AttrGroup               `json:"attr_groups"`
 	AttrTables  map[string]*schemas.Table  `json:"attr_tables"`
@@ -64,7 +64,7 @@ func init() {
 var (
 	mux             sync.RWMutex
 	dsTableCache    = map[string]map[string]*schemas.Table{}
-	entityMetaCache = map[string]*Meta{}
+	entityMetaCache = map[string]*EntityMeta{}
 )
 
 func RegisterEntity(engine *xorm.Engine, name, desc, pkAttrTable, pkAttrField string) (int64, error) {
@@ -78,7 +78,7 @@ func RegisterEntity(engine *xorm.Engine, name, desc, pkAttrTable, pkAttrField st
 	return engine.Insert(e)
 }
 
-func SerialMeta(m *Meta) (string, error) {
+func SerialMeta(m *EntityMeta) (string, error) {
 	data, err := json.Marshal(m)
 	if err != nil {
 		return "", err
@@ -104,7 +104,7 @@ func TableSchemasCache(engine *xorm.Engine) error {
 	return nil
 }
 
-func AcquireMeta(entity string, engine *xorm.Engine) (*Meta, error) {
+func AcquireMeta(entity string, engine *xorm.Engine) (*EntityMeta, error) {
 	m := getMetaFromCache(entity)
 	if m != nil {
 		return m, nil
@@ -117,7 +117,7 @@ func AcquireMeta(entity string, engine *xorm.Engine) (*Meta, error) {
 	return m, err
 }
 
-func getMetaFromCache(entityName string) *Meta {
+func getMetaFromCache(entityName string) *EntityMeta {
 	mux.RLocker()
 	defer mux.RLocker()
 	meta, ok := entityMetaCache[entityName]
@@ -127,7 +127,7 @@ func getMetaFromCache(entityName string) *Meta {
 	return meta
 }
 
-func getMetaFromDBAndCached(entityName string, engine *xorm.Engine) (*Meta, error) {
+func getMetaFromDBAndCached(entityName string, engine *xorm.Engine) (*EntityMeta, error) {
 	e, err := queryEntityFromDB(entityName, engine)
 	if err != nil {
 		return nil, err
@@ -150,7 +150,7 @@ func getMetaFromDBAndCached(entityName string, engine *xorm.Engine) (*Meta, erro
 			},
 		}
 	}
-	meta := &Meta{
+	meta := &EntityMeta{
 		Entity:     e,
 		AttrGroups: a,
 	}
@@ -192,7 +192,7 @@ func queryAttrGroupFromDB(entityId uint32, engine *xorm.Engine) ([]*AttrGroup, e
 	return r, err
 }
 
-func attachSchemaToMeta(m *Meta, tables map[string]*schemas.Table) error {
+func attachSchemaToMeta(m *EntityMeta, tables map[string]*schemas.Table) error {
 	if m.Entity == nil {
 		return fmt.Errorf("m.Entity is nil")
 	}
@@ -216,7 +216,7 @@ func attachSchemaToMeta(m *Meta, tables map[string]*schemas.Table) error {
 	return nil
 }
 
-func (m *Meta) buildColumnsIndex() {
+func (m *EntityMeta) buildColumnsIndex() {
 	m.ColumnIndex = make(map[string]*schemas.Column)
 	for tableName, schema := range m.AttrTables {
 		for _, col := range schema.Columns() {
@@ -230,7 +230,7 @@ func (m *Meta) buildColumnsIndex() {
 	}
 }
 
-func (m *Meta) Verify() error {
+func (m *EntityMeta) Verify() error {
 	var errs []error
 	if m.Entity == nil {
 		errs = append(errs, fmt.Errorf("entity is nil"))
@@ -258,7 +258,7 @@ func (m *Meta) Verify() error {
 }
 
 // GetAttrGroupTablesNameFromCols 通过列找到列所存在的属性表; 不包含主表 PkAttrTable
-func (m *Meta) GetAttrGroupTablesNameFromCols(cols []string) ([]string, error) {
+func (m *EntityMeta) GetAttrGroupTablesNameFromCols(cols []string) ([]string, error) {
 	var tables []string
 	tableSet := make(map[string]struct{})
 	if len(cols) == 1 && cols[0] == "*" {
@@ -282,14 +282,25 @@ func (m *Meta) GetAttrGroupTablesNameFromCols(cols []string) ([]string, error) {
 	return tables, nil
 }
 
-func (m *Meta) PrimaryTable() string {
+func (m *EntityMeta) PrimaryTable() string {
 	return m.Entity.PkAttrTable
 }
 
-func (m *Meta) IsPrimaryTable(table string) bool {
+func (m *EntityMeta) IsPrimaryTable(table string) bool {
 	return m.PrimaryTable() == table
 }
 
-func (m *Meta) HasAutoIncrement() bool {
+func (m *EntityMeta) HasAutoIncrement() bool {
 	return m.AttrTables[m.Entity.PkAttrTable].AutoIncrement != ""
+}
+
+func (m *EntityMeta) UniqueKeys() [][]string {
+	var uk [][]string
+	pt := m.AttrTables[m.Entity.PkAttrTable]
+	for _, idx := range pt.Indexes {
+		if idx.Type == schemas.UniqueType {
+			uk = append(uk, idx.Cols)
+		}
+	}
+	return uk
 }

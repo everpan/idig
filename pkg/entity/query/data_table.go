@@ -209,7 +209,7 @@ func (dt *DataTable) UpdateData(rowId, colId int, d any) {
 	dt.data[rowId][colId] = d
 }
 
-func (dt *DataTable) DivisionColumnsToTable(m *meta.Meta) (map[string][]string, error) {
+func (dt *DataTable) DivisionColumnsToTable(m *meta.EntityMeta) (map[string][]string, error) {
 	var ret = map[string][]string{}
 	for _, col := range dt.cols {
 		if m1, ok := m.ColumnIndex[col]; ok {

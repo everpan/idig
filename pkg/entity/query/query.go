@@ -69,8 +69,8 @@ func (q *Query) Parse(data []byte) error {
 	return nil
 }
 
-func (q *Query) AcquireAllMetas() (map[string]*meta.Meta, error) {
-	var metas = map[string]*meta.Meta{}
+func (q *Query) AcquireAllMetas() (map[string]*meta.EntityMeta, error) {
+	var metas = map[string]*meta.EntityMeta{}
 	for _, ea := range q.From.EntityAlias {
 		if ea.Query != nil {
 			ms, err := ea.Query.AcquireAllMetas()
@@ -110,7 +110,7 @@ func (q *Query) buildCond(bld *builder.Builder) error {
 	return nil
 }
 
-func (q *Query) buildSelectItems(bld *builder.Builder, m *meta.Meta) (*builder.Builder, error) {
+func (q *Query) buildSelectItems(bld *builder.Builder, m *meta.EntityMeta) (*builder.Builder, error) {
 	var cols []string
 	for _, item := range q.SelectItems {
 		cols = append(cols, item.Col)

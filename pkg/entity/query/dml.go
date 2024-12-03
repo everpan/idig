@@ -48,7 +48,7 @@ func (cv *ColumnValue) ParseValues(data []byte) error {
 	return err
 }
 
-func DivisionColumnsToTable(m *meta.Meta, cols []string) (map[string][]string, error) {
+func DivisionColumnsToTable(m *meta.EntityMeta, cols []string) (map[string][]string, error) {
 	pkIdx := slices.Index(cols, m.Entity.PkAttrField)
 	var ret = map[string][]string{}
 	for _, col := range cols {

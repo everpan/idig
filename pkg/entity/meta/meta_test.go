@@ -15,7 +15,7 @@ import (
 
 var (
 	engine *xorm.Engine
-	meta   *Meta
+	meta   *EntityMeta
 )
 
 func TestMain(m *testing.M) {
@@ -65,7 +65,7 @@ func createSeedData() {
 	engine.Insert(e2)
 
 	// meta
-	meta = &Meta{
+	meta = &EntityMeta{
 		Entity:     e1,
 		AttrGroups: []*AttrGroup{g1, g2},
 	}
@@ -74,7 +74,7 @@ func createSeedData() {
 func TestSerialMeta(t *testing.T) {
 	tests := []struct {
 		name    string
-		meta    *Meta
+		meta    *EntityMeta
 		want    string
 		wantErr bool
 	}{
@@ -154,7 +154,7 @@ func Test_queryAttrGroupFromDB(t *testing.T) {
 }
 
 func Test_attachSchemaToMeta(t *testing.T) {
-	metaWithNotExistGroup := &Meta{
+	metaWithNotExistGroup := &EntityMeta{
 		Entity:     meta.Entity,
 		AttrGroups: []*AttrGroup{{AttrTable: "not_exist_table"}},
 	}
@@ -162,12 +162,12 @@ func Test_attachSchemaToMeta(t *testing.T) {
 	tables := dsTableCache[DataSourceNameMd5(engine.DataSourceName())]
 	tests := []struct {
 		name          string
-		meta          *Meta
+		meta          *EntityMeta
 		tables        map[string]*schemas.Table
 		wantErr       bool
 		wantErrString string
 	}{
-		{"no attr groups", &Meta{}, nil, true, "meta.Entity is nil"},
+		{"no attr groups", &EntityMeta{}, nil, true, "meta.Entity is nil"},
 		{"no attr tables", meta, nil, true, "no attr tables"},
 		{"no attr tables", meta, dsTableCache["empty"], true, "no attr tables"},
 		{"normal", meta, tables, false, ""},

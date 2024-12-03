@@ -27,6 +27,7 @@ func init() {
 	config.RegisterRouter(dmlRoutes)
 }
 
+// dmlUpdate 多值update,自动寻找 pk uk
 func dmlUpdate(ctx *config.Context) error {
 	// return dmlAction(ctx, 2)
 	return nil
