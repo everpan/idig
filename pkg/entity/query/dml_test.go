@@ -27,11 +27,12 @@ func Test_parseValues(t *testing.T) {
 		{"array vals 1", `{"cols":["a","b"],"vals":[["a1",2323]]}`, func(cv *ColumnValue, err error) {
 			assert.Nil(t, err)
 			cv.tableName = "test"
-			assert.Equal(t, 2, len(cv.Columns()))
-			assert.Equal(t, 1, len(cv.Values()))
-			assert.Equal(t, 2, len(cv.Values()[0]))
-			assert.Equal(t, 2323, int(cv.Values()[0][1].(float64)))
-			bld := BuildInsertSQL("sqlite3", "test", cv.Columns(), cv.Values()[0])
+			dt := cv.DataTable()
+			assert.Equal(t, 2, len(dt.Columns()))
+			assert.Equal(t, 1, len(dt.Values()))
+			assert.Equal(t, 2, len(dt.Values()[0]))
+			assert.Equal(t, 2323, int(dt.Values()[0][1].(float64)))
+			bld := BuildInsertSQL("sqlite3", "test", dt.Columns(), dt.Values()[0])
 			sql, _, _ := bld.ToSQL()
 			assert.Equal(t, "INSERT INTO test (a,b) Values (?,?)", sql)
 			sql2, _ := bld.ToBoundSQL()
@@ -40,11 +41,12 @@ func Test_parseValues(t *testing.T) {
 		{"array vals 2", `{"cols":["pk","a","b"],"vals":[[3,"a1",2]]}`, func(cv *ColumnValue, err error) {
 			assert.Nil(t, err)
 			cv.tableName = "test"
-			assert.Equal(t, 3, len(cv.Columns()))
-			assert.Equal(t, 1, len(cv.Values()))
-			assert.Equal(t, 3, len(cv.Values()[0]))
-			assert.Equal(t, 2, int(cv.Values()[0][2].(float64)))
-			bld := BuildInsertSQL("sqlite3", "test", cv.Columns(), cv.Values()[0])
+			dt := cv.DataTable()
+			assert.Equal(t, 3, len(dt.Columns()))
+			assert.Equal(t, 1, len(dt.Values()))
+			assert.Equal(t, 3, len(dt.Values()[0]))
+			assert.Equal(t, 2, int(dt.Values()[0][2].(float64)))
+			bld := BuildInsertSQL("sqlite3", "test", dt.Columns(), dt.Values()[0])
 			sql, _, _ := bld.ToSQL()
 			assert.Equal(t, "INSERT INTO test (a,b,pk) Values (?,?,?)", sql)
 			sql2, _ := bld.ToBoundSQL()
@@ -52,29 +54,32 @@ func Test_parseValues(t *testing.T) {
 		}},
 		{"array vals", `{"cols":["a","b"],"vals":[["a1",2],["a1",29]]}`, func(cv *ColumnValue, err error) {
 			assert.Nil(t, err)
-			assert.Equal(t, 2, len(cv.Columns()))
-			assert.Equal(t, 2, len(cv.Values()[0]))
-			assert.Equal(t, 29, int(cv.Values()[1][1].(float64)))
+			dt := cv.DataTable()
+			assert.Equal(t, 2, len(dt.Columns()))
+			assert.Equal(t, 2, len(dt.Values()[0]))
+			assert.Equal(t, 29, int(dt.Values()[1][1].(float64)))
 		}},
 		{"single", `{"vals":{"a":"va","b":31,"c":"vc"}}`, func(cv *ColumnValue, err error) {
 			assert.Nil(t, err)
-			assert.Equal(t, 1, len(cv.Values()))
-			assert.Equal(t, 3, len(cv.Values()[0]))
-			assert.Equal(t, 3, len(cv.Columns()))
-			for i, k := range cv.Columns() {
+			dt := cv.DataTable()
+			assert.Equal(t, 1, len(dt.Values()))
+			assert.Equal(t, 3, len(dt.Values()[0]))
+			assert.Equal(t, 3, len(dt.Columns()))
+			for i, k := range dt.Columns() {
 				if k == "b" {
-					assert.Equal(t, 31, int(cv.Values()[0][i].(float64)))
+					assert.Equal(t, 31, int(dt.Values()[0][i].(float64)))
 				}
 			}
 		}},
 		{"multi vals", `{"vals":[{"a":"va","b":31,"c":"vc"},{"a":"va","b":32,"c":"vc"}]}`, func(cv *ColumnValue, err error) {
 			assert.Nil(t, err)
-			assert.Equal(t, 3, len(cv.Columns()))
-			assert.Equal(t, 3, len(cv.Values()[0]))
-			t.Logf("cols: %v\n", cv.Columns())
-			for i, k := range cv.Columns() {
+			dt := cv.DataTable()
+			assert.Equal(t, 3, len(dt.Columns()))
+			assert.Equal(t, 3, len(dt.Values()[0]))
+			t.Logf("cols: %v\n", dt.Columns())
+			for i, k := range dt.Columns() {
 				if k == "b" {
-					assert.Equal(t, 31, int(cv.Values()[0][i].(float64)))
+					assert.Equal(t, 31, int(dt.Values()[0][i].(float64)))
 				}
 			}
 		}},

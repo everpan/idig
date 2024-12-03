@@ -9,6 +9,7 @@ import (
 type Attr struct {
 	Name      string `json:"name"`
 	Type      string `json:"type"`
+	Comment   string `json:"comment"`
 	Length1   int64  `json:"length1,omitempty"`
 	Length2   int64  `json:"length2,omitempty"`
 	AttrTable string `json:"attr_table"` // table name
@@ -25,6 +26,7 @@ type JMeta struct {
 func (attr *Attr) FromColumn(attrTable string, col *schemas.Column) {
 	attr.Name = col.Name
 	attr.Type = strings.ToLower(col.SQLType.Name)
+	attr.Comment = strings.TrimSpace(col.Comment)
 	attr.Length1 = col.SQLType.DefaultLength
 	attr.Length2 = col.SQLType.DefaultLength2
 	attr.AttrTable = attrTable

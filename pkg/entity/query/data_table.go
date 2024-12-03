@@ -92,6 +92,9 @@ func parseSingleValue(colList []string, mv map[string]any) ([]any, error) {
 }
 
 func (dt *DataTable) AddColumn(col string) {
+	if slices.Index(dt.cols, col) != -1 {
+		return
+	}
 	dt.cols = append(dt.cols, col)
 	// dt.colIndex = append(dt.colIndex, len(dt.colIndex))
 	if len(dt.data) > 0 {
@@ -136,28 +139,28 @@ func (dt *DataTable) ValidIndex(index []int) error {
 }
 
 // FetchRowData 通过索引获取指定行数据
-func (dt *DataTable) FetchRowData(row int, index []int) ([]any, error) {
-	if row < 0 || row >= len(dt.data) {
-		return nil, fmt.Errorf("row %d is out of range", row)
-	}
+func (dt *DataTable) FetchRowData(row int, index []int) []any {
 	var result = make([]any, len(index))
 	data := dt.data[row]
 	for _, i := range index {
 		result[i] = data[i]
 	}
-	return result, nil
+	return result
+}
+
+// FetchRowDataWithSQL 获取行数据，并在头部放入sqlStr
+func (dt *DataTable) FetchRowDataWithSQL(row int, index []int, sqlStr string) []any {
+	var result = make([]any, len(index)+1)
+	data := dt.data[row]
+	for _, i := range index {
+		result[i] = data[i]
+	}
+	return result
 }
 
 // FetchColumnIndex 获取制定列的索引
-func (dt *DataTable) FetchColumnIndex(col string) (int, error) {
-	idx := -1
-	for i, c := range dt.cols {
-		if c == col {
-			idx = i
-			return i, nil
-		}
-	}
-	return idx, fmt.Errorf("not found column %s", col)
+func (dt *DataTable) FetchColumnIndex(col string) int {
+	return slices.Index(dt.cols, col)
 }
 
 // FetchColumnsIndex 获取制定列的索引
@@ -183,7 +186,13 @@ func (dt *DataTable) FetchRowDataByColumns(row int, cols []string) ([]any, error
 	if err != nil {
 		return nil, err
 	}
-	return dt.FetchRowData(row, index)
+	return dt.FetchRowData(row, index), nil
+}
+
+// SortColumnsAndFetchIndices 列排序，且获取索引
+func (dt *DataTable) SortColumnsAndFetchIndices(cols []string) ([]int, error) {
+	slices.Sort(cols)
+	return dt.FetchColumnsIndex(cols)
 }
 
 func (dt *DataTable) CheckRowColId(rowId, colId int) error {

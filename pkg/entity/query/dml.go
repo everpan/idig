@@ -35,16 +35,9 @@ type ColumnValue struct { // data manager
 	data      *DataTable
 }
 
-func (cv *ColumnValue) Columns() []string {
+func (cv *ColumnValue) DataTable() *DataTable {
 	if cv.data != nil {
-		return cv.data.Columns()
-	}
-	return nil
-}
-
-func (cv *ColumnValue) Values() [][]any {
-	if cv.data != nil {
-		return cv.data.Values()
+		return cv.data
 	}
 	return nil
 }

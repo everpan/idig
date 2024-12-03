@@ -289,3 +289,7 @@ func (m *Meta) PrimaryTable() string {
 func (m *Meta) IsPrimaryTable(table string) bool {
 	return m.PrimaryTable() == table
 }
+
+func (m *Meta) HasAutoIncrement() bool {
+	return m.AttrTables[m.Entity.PkAttrTable].AutoIncrement != ""
+}
