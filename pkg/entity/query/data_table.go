@@ -13,6 +13,15 @@ type DataTable struct {
 	data [][]any
 }
 
+type JDataTable struct {
+	Cols []string `json:"cols"`
+	Data [][]any  `json:"data"`
+}
+
+func (jd *JDataTable) From(dt *DataTable) {
+	jd.Cols, jd.Data = dt.cols, dt.data
+}
+
 func NewDataTable() *DataTable {
 	return &DataTable{}
 }
@@ -157,9 +166,10 @@ func (dt *DataTable) FetchRowData(row int, index []int) []any {
 // FetchRowDataWithSQL 获取行数据，并在头部放入sqlStr
 func (dt *DataTable) FetchRowDataWithSQL(row int, index []int, sqlStr string) []any {
 	var result = make([]any, len(index)+1)
+	result[0] = sqlStr
 	data := dt.data[row]
 	for _, i := range index {
-		result[i] = data[i]
+		result[i+1] = data[i]
 	}
 	return result
 }
@@ -215,9 +225,13 @@ func (dt *DataTable) UpdateData(rowId, colId int, d any) {
 	dt.data[rowId][colId] = d
 }
 
-func (dt *DataTable) DivisionColumnsToTable(m *meta.EntityMeta) (map[string][]string, error) {
+func (dt *DataTable) DivisionColumnsToTable(m *meta.EntityMeta, withPk bool) (map[string][]string, error) {
 	var ret = map[string][]string{}
+	pk := m.PrimaryColumn()
 	for _, col := range dt.cols {
+		if !withPk && pk == col {
+			continue
+		}
 		if m1, ok := m.ColumnIndex[col]; ok {
 			if dt2, ok2 := ret[m1.TableName]; ok2 {
 				dt2 = append(dt2, col)
@@ -227,6 +241,13 @@ func (dt *DataTable) DivisionColumnsToTable(m *meta.EntityMeta) (map[string][]st
 			}
 		} else {
 			return nil, fmt.Errorf("column '%s' not found", col)
+		}
+	}
+	if withPk {
+		for t, v := range ret {
+			if t != m.PrimaryTable() {
+				v = append(v, pk)
+			}
 		}
 	}
 	return ret, nil
