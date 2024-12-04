@@ -15,7 +15,7 @@ type DataTable struct {
 
 type JDataTable struct {
 	Cols []string `json:"cols"`
-	Data [][]any  `json:"data"`
+	Data [][]any  `json:"vals"`
 }
 
 func (jd *JDataTable) From(dt *DataTable) {
