@@ -23,6 +23,11 @@ type JMeta struct {
 	PrimaryKeys []string     `json:"primary_keys"`
 }
 
+func (jm *JMeta) ToJson() []byte {
+	jd, _ := json.Marshal(jm)
+	return jd
+}
+
 func (attr *Attr) FromColumn(attrTable string, col *schemas.Column) {
 	attr.Name = col.Name
 	attr.Type = strings.ToLower(col.SQLType.Name)

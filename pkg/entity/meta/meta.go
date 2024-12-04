@@ -78,6 +78,24 @@ func RegisterEntity(engine *xorm.Engine, name, desc, pkAttrTable, pkAttrField st
 	return engine.Insert(e)
 }
 
+func AddEntityAttrGroupByName(engine *xorm.Engine, entityName string, groupName string, attrTable string) (int64, error) {
+	em, err := getMetaFromDB(entityName, engine)
+	if err != nil {
+		return 0, err
+	}
+	return AddEntityAttrGroupById(engine, em.Entity.EntityIdx, groupName, attrTable)
+}
+
+func AddEntityAttrGroupById(engine *xorm.Engine, entityIdx uint32, groupName string, attrTable string) (int64, error) {
+	g := &AttrGroup{
+		EntityIdx:   entityIdx,
+		AttrTable:   attrTable,
+		GroupName:   groupName,
+		Description: attrTable,
+	}
+	return engine.Insert(g)
+}
+
 func SerialMeta(m *EntityMeta) (string, error) {
 	data, err := json.Marshal(m)
 	if err != nil {
@@ -128,6 +146,17 @@ func getMetaFromCache(entityName string) *EntityMeta {
 }
 
 func getMetaFromDBAndCached(entityName string, engine *xorm.Engine) (*EntityMeta, error) {
+	em, err := getMetaFromDB(entityName, engine)
+	if err != nil {
+		return nil, err
+	}
+	mux.Lock()
+	defer mux.Unlock()
+	entityMetaCache[entityName] = em
+	return em, nil
+}
+
+func getMetaFromDB(entityName string, engine *xorm.Engine) (*EntityMeta, error) {
 	e, err := queryEntityFromDB(entityName, engine)
 	if err != nil {
 		return nil, err
@@ -139,21 +168,17 @@ func getMetaFromDBAndCached(entityName string, engine *xorm.Engine) (*EntityMeta
 	if err != nil {
 		return nil, err
 	}
-	if a == nil {
-		// att 为空，构建 PkAttrTable 为主的属性
-		a = []*AttrGroup{
-			{
-				GroupIdx:    0,
-				EntityIdx:   e.EntityIdx,
-				AttrTable:   e.PkAttrTable,
-				Description: "auto build virtual attr group",
-			},
-		}
-	}
+	// 如果attrs中不包含主表，则添加一个虚拟的
 	meta := &EntityMeta{
 		Entity:     e,
 		AttrGroups: a,
 	}
+	meta.AddAttrGroup(&AttrGroup{
+		GroupIdx:    0,
+		EntityIdx:   e.EntityIdx,
+		AttrTable:   e.PkAttrTable,
+		Description: "auto build virtual attr group",
+	})
 	key := DataSourceNameMd5(engine.DataSourceName())
 	tables, ok := dsTableCache[key]
 	if !ok {
@@ -164,9 +189,6 @@ func getMetaFromDBAndCached(entityName string, engine *xorm.Engine) (*EntityMeta
 	if err != nil {
 		return nil, err
 	}
-	mux.Lock()
-	defer mux.Unlock()
-	entityMetaCache[entityName] = meta
 	return meta, nil
 }
 
@@ -280,6 +302,15 @@ func (m *EntityMeta) GetAttrGroupTablesNameFromCols(cols []string) ([]string, er
 		tables = append(tables, t)
 	}
 	return tables, nil
+}
+
+func (m *EntityMeta) AddAttrGroup(a *AttrGroup) {
+	for _, at := range m.AttrGroups {
+		if a.AttrTable == at.AttrTable {
+			return
+		}
+	}
+	m.AttrGroups = append(m.AttrGroups, a)
 }
 
 func (m *EntityMeta) PrimaryTable() string {

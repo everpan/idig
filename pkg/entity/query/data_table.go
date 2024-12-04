@@ -49,6 +49,7 @@ func (jd *JDataTable) FromArrayMap(am []map[string]any) {
 func NewDataTable() *DataTable {
 	return &DataTable{}
 }
+
 func (dt *DataTable) ParseKeyCols(raw map[string]any) error {
 	if v, ok := raw["cols"]; ok {
 		for _, v1 := range v.([]any) {
@@ -61,6 +62,7 @@ func (dt *DataTable) ParseKeyCols(raw map[string]any) error {
 	}
 	return nil
 }
+
 func (dt *DataTable) ParseKeyVals(raw map[string]any) error {
 	var err error
 	if v, ok := raw["vals"]; ok {
@@ -104,10 +106,11 @@ func (dt *DataTable) ParseKeyVals(raw map[string]any) error {
 	}
 	return nil
 }
+
 func (dt *DataTable) ParseValues(data []byte) error {
 	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
+		return fmt.Errorf("json umarshal error: %v", err.Error())
 	}
 	if err := dt.ParseKeyCols(raw); err != nil {
 		return err
@@ -130,17 +133,19 @@ func parseSingleValue(colList []string, mv map[string]any) ([]any, error) {
 	return ret, nil
 }
 
-func (dt *DataTable) AddColumn(col string) {
-	if slices.Index(dt.cols, col) != -1 {
-		return
+func (dt *DataTable) AddColumn(col string) int {
+	idx := slices.Index(dt.cols, col)
+	if idx > -1 {
+		return idx
 	}
+	idx = len(dt.cols)
 	dt.cols = append(dt.cols, col)
-	// dt.colIndex = append(dt.colIndex, len(dt.colIndex))
 	if len(dt.data) > 0 {
-		for _, rd := range dt.data {
-			rd = append(rd, nil)
+		for i, _ := range dt.data {
+			dt.data[i] = append(dt.data[i], nil)
 		}
 	}
+	return idx
 }
 
 func (dt *DataTable) AddColumns(cols []string) {
@@ -189,6 +194,7 @@ func (dt *DataTable) FetchRowData(row int, index []int) []any {
 
 // FetchRowDataWithSQL 获取行数据，并在头部放入sqlStr
 func (dt *DataTable) FetchRowDataWithSQL(row int, index []int, sqlStr string) []any {
+	fmt.Printf("fetch row data: %d %v %s \n", row, index, sqlStr)
 	var result = make([]any, len(index)+1)
 	result[0] = sqlStr
 	data := dt.data[row]
@@ -246,6 +252,7 @@ func (dt *DataTable) CheckRowColId(rowId, colId int) error {
 }
 
 func (dt *DataTable) UpdateData(rowId, colId int, d any) {
+	fmt.Printf("Update data : %v %v %v\n", rowId, colId, d)
 	dt.data[rowId][colId] = d
 }
 
@@ -257,8 +264,8 @@ func (dt *DataTable) DivisionColumnsToTable(m *meta.EntityMeta, withPk bool) (ma
 			continue
 		}
 		if m1, ok := m.ColumnIndex[col]; ok {
-			if dt2, ok2 := ret[m1.TableName]; ok2 {
-				dt2 = append(dt2, col)
+			if _, ok2 := ret[m1.TableName]; ok2 {
+				ret[m1.TableName] = append(ret[m1.TableName], col)
 			} else {
 				dt1 := []string{col}
 				ret[m1.TableName] = dt1
@@ -268,9 +275,9 @@ func (dt *DataTable) DivisionColumnsToTable(m *meta.EntityMeta, withPk bool) (ma
 		}
 	}
 	if withPk {
-		for t, v := range ret {
+		for t := range ret {
 			if t != m.PrimaryTable() {
-				v = append(v, pk)
+				ret[t] = append(ret[t], pk)
 			}
 		}
 	}

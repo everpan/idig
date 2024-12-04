@@ -88,8 +88,9 @@ func dmlInsert(ctx *config.Context) error {
 		// 非自增表，无主键，不能插入
 		return ctx.SendBadRequestError(fmt.Errorf("primary key required"))
 	}
-	dt.AddColumn(pkColumn) // 增加主键，参与分组
-	tableCols, err := dt.DivisionColumnsToTable(m, false)
+	pkId = dt.AddColumn(pkColumn) // 增加主键，参与分组
+	tableCols, err := dt.DivisionColumnsToTable(m, true)
+	fmt.Printf("tableCols:%v %v\n", dt.Columns(), tableCols)
 	if err != nil {
 		return ctx.SendJSON(-1, "can't division entity to attrs groups", err.Error())
 	}
@@ -101,14 +102,17 @@ func dmlInsert(ctx *config.Context) error {
 	}
 	if hasAutoIncrement {
 		// 自增表，不需要赋值主键，移除
+		fmt.Printf("tableCols: del0 %v pk len %v\n", tableCols, len(tableCols[pkTable]))
 		pkCols = slices.DeleteFunc(pkCols, func(s string) bool {
 			return s == pkColumn
 		})
+		fmt.Printf("tableCols: del1 %v pk len %v; %v %v\n", tableCols, len(tableCols[pkTable]), pkCols, len(pkCols))
 	}
 	sess := engine.NewSession()
 	defer func(sess *xorm.Session) {
 		_ = sess.Close()
 	}(sess)
+	fmt.Printf("tableCols: %v pk len %v\n", tableCols, len(tableCols[pkTable]))
 	insertCount, err2 := InsertEntity(engine, sess, pkTable, pkCols, dt, hasAutoIncrement, pkId)
 	if err2 != nil {
 		return ctx.SendJSON(-1, "insert data error", err2.Error())

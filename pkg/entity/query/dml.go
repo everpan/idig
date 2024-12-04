@@ -1,9 +1,6 @@
 package query
 
 import (
-	"fmt"
-	"github.com/everpan/idig/pkg/entity/meta"
-	"slices"
 	"xorm.io/builder"
 )
 
@@ -46,28 +43,6 @@ func (cv *ColumnValue) ParseValues(data []byte) error {
 	cv.data = NewDataTable()
 	err := cv.data.ParseValues(data)
 	return err
-}
-
-func DivisionColumnsToTable(m *meta.EntityMeta, cols []string) (map[string][]string, error) {
-	pkIdx := slices.Index(cols, m.Entity.PkAttrColumn)
-	var ret = map[string][]string{}
-	for _, col := range cols {
-		if m1, ok := m.ColumnIndex[col]; ok {
-			if colDist, ok2 := ret[m1.TableName]; ok2 {
-				colDist = append(colDist, col)
-			} else {
-				cols2 := make([]string, 0)
-				if pkIdx >= 0 { // 原始列中的pk，分布到各个表
-					cols2 = append(cols2, m.Entity.PkAttrColumn)
-				}
-				cols2 = append(cols2, col)
-				ret[m1.TableName] = cols2
-			}
-		} else {
-			return nil, fmt.Errorf("column '%s' not found", col)
-		}
-	}
-	return ret, nil
 }
 
 func BuildInsertSQL(dialect, table string, cols []string, vals []any) *builder.Builder {

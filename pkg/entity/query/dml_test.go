@@ -16,6 +16,10 @@ func Test_arrayList(t *testing.T) {
 	var v1 []any
 	json.Unmarshal(s, &v1)
 	assert.Equal(t, 1, v[1])
+
+	var d []any
+	d = append(d, nil)
+	assert.Equal(t, 1, len(d))
 }
 
 func Test_parseValues(t *testing.T) {
