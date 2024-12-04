@@ -22,6 +22,30 @@ func (jd *JDataTable) From(dt *DataTable) {
 	jd.Cols, jd.Data = dt.cols, dt.data
 }
 
+func (jd *JDataTable) FromArrayMap(am []map[string]any) {
+	if len(am) < 1 {
+		return
+	}
+	idx := map[string]int{}
+	for k := range am[0] {
+		idx[k] = len(jd.Cols)
+		jd.Cols = append(jd.Cols, k)
+	}
+	for i := range am {
+		m := am[i]
+		av := make([]any, len(jd.Cols))
+		for k, v := range m {
+			j, ok := idx[k]
+			if !ok {
+				j = len(jd.Cols)
+				idx[k] = j
+				jd.Cols = append(jd.Cols, k)
+			}
+			av[j] = v
+		}
+	}
+}
+
 func NewDataTable() *DataTable {
 	return &DataTable{}
 }

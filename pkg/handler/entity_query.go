@@ -67,6 +67,10 @@ func queryData(ctx *config.Context, data []byte) error {
 	if err != nil {
 		return ctx.SendJSON(-1, "query error", err.Error())
 	}
-
+	if ctx.Fiber().Get("X-Output-Fmt") == "data-table" {
+		dt := &query.JDataTable{}
+		dt.FromArrayMap(ret)
+		return ctx.SendSuccess(dt)
+	}
 	return ctx.SendSuccess(ret)
 }
