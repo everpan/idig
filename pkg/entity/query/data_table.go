@@ -186,20 +186,19 @@ func (dt *DataTable) ValidIndex(index []int) error {
 func (dt *DataTable) FetchRowData(row int, index []int) []any {
 	var result = make([]any, len(index))
 	data := dt.data[row]
-	for _, i := range index {
-		result[i] = data[i]
+	for i, j := range index {
+		result[i] = data[j]
 	}
 	return result
 }
 
 // FetchRowDataWithSQL 获取行数据，并在头部放入sqlStr
 func (dt *DataTable) FetchRowDataWithSQL(row int, index []int, sqlStr string) []any {
-	fmt.Printf("fetch row data: %d %v %s \n", row, index, sqlStr)
 	var result = make([]any, len(index)+1)
 	result[0] = sqlStr
 	data := dt.data[row]
-	for _, i := range index {
-		result[i+1] = data[i]
+	for i, j := range index {
+		result[i+1] = data[j]
 	}
 	return result
 }
@@ -252,7 +251,6 @@ func (dt *DataTable) CheckRowColId(rowId, colId int) error {
 }
 
 func (dt *DataTable) UpdateData(rowId, colId int, d any) {
-	fmt.Printf("Update data : %v %v %v\n", rowId, colId, d)
 	dt.data[rowId][colId] = d
 }
 

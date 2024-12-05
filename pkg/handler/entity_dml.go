@@ -6,6 +6,7 @@ import (
 	"github.com/everpan/idig/pkg/entity/meta"
 	"github.com/everpan/idig/pkg/entity/query"
 	"github.com/gofiber/fiber/v2"
+	"go.uber.org/zap"
 	"slices"
 	"xorm.io/builder"
 	"xorm.io/xorm"
@@ -90,7 +91,6 @@ func dmlInsert(ctx *config.Context) error {
 	}
 	pkId = dt.AddColumn(pkColumn) // 增加主键，参与分组
 	tableCols, err := dt.DivisionColumnsToTable(m, true)
-	fmt.Printf("tableCols:%v %v\n", dt.Columns(), tableCols)
 	if err != nil {
 		return ctx.SendJSON(-1, "can't division entity to attrs groups", err.Error())
 	}
@@ -101,18 +101,15 @@ func dmlInsert(ctx *config.Context) error {
 		return ctx.SendJSON(-1, "no values for primary table", nil)
 	}
 	if hasAutoIncrement {
-		// 自增表，不需要赋值主键，移除
-		fmt.Printf("tableCols: del0 %v pk len %v\n", tableCols, len(tableCols[pkTable]))
+		pkCols = slices.Clone(pkCols)
 		pkCols = slices.DeleteFunc(pkCols, func(s string) bool {
 			return s == pkColumn
 		})
-		fmt.Printf("tableCols: del1 %v pk len %v; %v %v\n", tableCols, len(tableCols[pkTable]), pkCols, len(pkCols))
 	}
 	sess := engine.NewSession()
 	defer func(sess *xorm.Session) {
 		_ = sess.Close()
 	}(sess)
-	fmt.Printf("tableCols: %v pk len %v\n", tableCols, len(tableCols[pkTable]))
 	insertCount, err2 := InsertEntity(engine, sess, pkTable, pkCols, dt, hasAutoIncrement, pkId)
 	if err2 != nil {
 		return ctx.SendJSON(-1, "insert data error", err2.Error())
@@ -169,6 +166,9 @@ func UpdateEntity(engine *xorm.Engine, sess *xorm.Session, table string, cols []
 
 func InsertEntity(engine *xorm.Engine, sess *xorm.Session, table string, cols []string,
 	dt *query.DataTable, updateAutoInc bool, pkId int) (int, error) {
+	if len(cols) == 0 {
+		return 0, fmt.Errorf("insert into '%v' cols is empty", table)
+	}
 	// xorm builder 对插入cols进行了排序，保持一致
 	pkColsIndex, err := dt.SortColumnsAndFetchIndices(cols)
 	if err != nil {
@@ -176,6 +176,7 @@ func InsertEntity(engine *xorm.Engine, sess *xorm.Session, table string, cols []
 	}
 	bld := query.BuildInsertSQL(engine.DriverName(), table, cols, dt.FetchRowData(0, pkColsIndex))
 	sqlStr, _, err := bld.ToSQL()
+	logger.Info("InsertEntity", zap.String("sql", sqlStr), zap.Int("row count", len(dt.Values())))
 	if err != nil {
 		return 0, err
 	}
