@@ -76,11 +76,7 @@ func (w *Where) BuildSQL(bld *builder.Builder) error {
 	if err != nil {
 		return err
 	}
-	if w.Tie == "or" {
-		bld.Or(cond)
-	} else {
-		bld.And(cond)
-	}
+	bld.Where(cond)
 	return nil
 }
 

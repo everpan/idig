@@ -2,10 +2,11 @@ package query
 
 import (
 	"fmt"
+	"slices"
+
 	"github.com/everpan/idig/pkg/entity/meta"
 	"github.com/goccy/go-json"
 	"golang.org/x/exp/maps"
-	"slices"
 )
 
 type DataTable struct {
@@ -141,7 +142,7 @@ func (dt *DataTable) AddColumn(col string) int {
 	idx = len(dt.cols)
 	dt.cols = append(dt.cols, col)
 	if len(dt.data) > 0 {
-		for i, _ := range dt.data {
+		for i := range dt.data {
 			dt.data[i] = append(dt.data[i], nil)
 		}
 	}

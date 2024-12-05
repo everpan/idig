@@ -2,12 +2,13 @@ package handler
 
 import (
 	"fmt"
+	"slices"
+
 	"github.com/everpan/idig/pkg/config"
 	"github.com/everpan/idig/pkg/entity/meta"
 	"github.com/everpan/idig/pkg/entity/query"
 	"github.com/gofiber/fiber/v2"
 	"go.uber.org/zap"
-	"slices"
 	"xorm.io/builder"
 	"xorm.io/xorm"
 )
@@ -142,7 +143,11 @@ func UpdateEntity(engine *xorm.Engine, sess *xorm.Session, table string, cols []
 	}
 	vals = dt.FetchRowData(0, valIdx)
 	for i, col := range keyCols {
-		pkCond.And(builder.Eq{col: pkVals[i]})
+		if pkCond == nil {
+			pkCond = builder.Eq{col: pkVals[i]}
+		} else {
+			pkCond.And(builder.Eq{col: pkVals[i]})
+		}
 	}
 	var valCond []builder.Cond
 	for i, col := range cols {

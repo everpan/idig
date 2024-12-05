@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/base64"
 	"fmt"
+
 	"github.com/everpan/idig/pkg/config"
 	"github.com/everpan/idig/pkg/entity/query"
 	"github.com/gofiber/fiber/v2"
@@ -48,6 +49,9 @@ func queryPost(ctx *config.Context) error {
 // queryData 从query的dsl中，通过entity 查询数据
 func queryData(ctx *config.Context, data []byte) error {
 	tenant := ctx.Tenant()
+	if tenant == nil {
+		return ctx.SendBadRequestError(fmt.Errorf("tenant not found"))
+	}
 	q := query.NewQuery(tenant.TenantIdx, ctx.Engine())
 	err := q.Parse(data)
 	if err != nil {
