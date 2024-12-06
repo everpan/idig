@@ -3,8 +3,8 @@ package database
 import (
 	"context"
 	"database/sql"
-	"github.com/ever/idig/pkg/event"
-	eventesting "github.com/ever/idig/pkg/event/testing"
+	"github.com/everpan/idig/pkg/event"
+	eventesting "github.com/everpan/idig/pkg/event/testing"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/suite"
 	"testing"

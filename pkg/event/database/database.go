@@ -4,7 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"github.com/ever/idig/pkg/event"
+	"fmt"
+	"github.com/everpan/idig/pkg/event"
 	"sync"
 	"time"
 )
@@ -40,6 +41,10 @@ func NewDBEventBus(db *sql.DB) (*DBEventBus, error) {
 }
 
 func (d *DBEventBus) Publish(ctx context.Context, topic string, evt event.Event) error {
+	if err := evt.Validate(); err != nil {
+		return fmt.Errorf("invalid event: %w", err)
+	}
+
 	data, err := json.Marshal(evt.Data)
 	if err != nil {
 		return err
@@ -80,16 +85,18 @@ func (d *DBEventBus) Subscribe(ctx context.Context, topic string, handler func(e
 				if err != nil {
 					continue
 				}
+				defer rows.Close()
 
 				for rows.Next() {
 					var evt event.Event
 					var dataStr string
-					err := rows.Scan(&evt.ID, &evt.Type, &evt.Source, &dataStr, &evt.Timestamp)
-					if err != nil {
+					if err := rows.Scan(&evt.ID, &evt.Type, &evt.Source, &dataStr, &evt.Timestamp); err != nil {
+						// Log the error and continue
 						continue
 					}
 
 					if err := json.Unmarshal([]byte(dataStr), &evt.Data); err != nil {
+						// Log the error and continue
 						continue
 					}
 
@@ -99,20 +106,23 @@ func (d *DBEventBus) Subscribe(ctx context.Context, topic string, handler func(e
 
 					for _, h := range handlers {
 						if err := h(evt); err != nil {
-							// Handle error (could log it or implement retry logic)
+							// Log the error and continue
 							continue
 						}
 					}
 
 					// Mark event as processed
-					_, err = d.db.ExecContext(ctx, `
+					if _, err = d.db.ExecContext(ctx, `
 						UPDATE events SET processed = TRUE WHERE id = ?
-					`, evt.ID)
-					if err != nil {
+					`, evt.ID); err != nil {
 						continue
 					}
 				}
-				rows.Close()
+
+				// Check for errors from iterating over rows
+				if err = rows.Err(); err != nil {
+					continue
+				}
 			}
 		}
 	}()

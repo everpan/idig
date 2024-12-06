@@ -7,8 +7,9 @@ import (
 	"github.com/apache/rocketmq-client-go/v2/consumer"
 	"github.com/apache/rocketmq-client-go/v2/primitive"
 	"github.com/apache/rocketmq-client-go/v2/producer"
-	"github.com/ever/idig/pkg/event"
+	"github.com/everpan/idig/pkg/event"
 	"sync"
+	"time"
 )
 
 type RocketMQEventBus struct {
@@ -96,8 +97,22 @@ func (r *RocketMQEventBus) Subscribe(ctx context.Context, topic string, handler 
 			r.mu.RUnlock()
 
 			for _, h := range handlers {
-				if err := h(evt); err != nil {
-					return consumer.ConsumeRetryLater, err
+				maxRetries := 3
+				retryCount := 0
+				for {
+					if err := h(evt); err != nil {
+						if err == event.ErrRetry {
+							if retryCount < maxRetries {
+								retryCount++
+								time.Sleep(time.Duration(retryCount) * time.Second)
+								continue
+							}
+							return consumer.ConsumeRetryLater, err
+						}
+						// Other errors, don't retry
+						return consumer.ConsumeRetryLater, err
+					}
+					break // Success, break retry loop
 				}
 			}
 		}

@@ -2,10 +2,11 @@ package testing
 
 import (
 	"context"
-	"github.com/ever/idig/pkg/event"
+	"fmt"
+	"github.com/everpan/idig/pkg/event"
 	"github.com/stretchr/testify/suite"
 	"sync"
-	"testing"
+	_ "testing"
 	"time"
 )
 
@@ -246,11 +247,11 @@ func (suite *EventBusTestSuite) TestMultipleTopics() {
 	ctx := context.Background()
 	topics := []string{"test.topic1", "test.topic2", "test.topic3"}
 	received := make(map[string]chan event.Event)
-	
+
 	for _, topic := range topics {
 		received[topic] = make(chan event.Event, 1)
 		topicCopy := topic // Capture topic in closure
-		
+
 		err := suite.EventBus.Subscribe(ctx, topicCopy, func(e event.Event) error {
 			received[topicCopy] <- e
 			return nil

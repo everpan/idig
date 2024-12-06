@@ -2,10 +2,10 @@ package rocketmq
 
 import (
 	"context"
-	"github.com/apache/rocketmq-client-go/v2"
+	"github.com/apache/rocketmq-client-go/v2/consumer"
 	"github.com/apache/rocketmq-client-go/v2/primitive"
-	"github.com/ever/idig/pkg/event"
-	eventesting "github.com/ever/idig/pkg/event/testing"
+	"github.com/everpan/idig/pkg/event"
+	eventesting "github.com/everpan/idig/pkg/event/testing"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
 	"testing"
@@ -15,6 +15,26 @@ import (
 // MockProducer mocks RocketMQ producer
 type MockProducer struct {
 	mock.Mock
+}
+
+func (m *MockProducer) SendAsync(ctx context.Context, mq func(ctx context.Context, result *primitive.SendResult, err error), msg ...*primitive.Message) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *MockProducer) SendOneWay(ctx context.Context, mq ...*primitive.Message) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *MockProducer) Request(ctx context.Context, ttl time.Duration, msg *primitive.Message) (*primitive.Message, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *MockProducer) RequestAsync(ctx context.Context, ttl time.Duration, callback interface{}, msg *primitive.Message) error {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (m *MockProducer) Start() error {
@@ -73,8 +93,8 @@ func (m *MockPushConsumer) SimulateMessage(ctx context.Context, msgs ...*primiti
 
 type RocketMQEventBusTestSuite struct {
 	eventesting.EventBusTestSuite
-	mockProducer  *MockProducer
-	mockConsumer  *MockPushConsumer
+	mockProducer *MockProducer
+	mockConsumer *MockPushConsumer
 }
 
 func (suite *RocketMQEventBusTestSuite) SetupTest() {
@@ -96,7 +116,7 @@ func (suite *RocketMQEventBusTestSuite) SetupTest() {
 func (suite *RocketMQEventBusTestSuite) TearDownTest() {
 	suite.mockProducer.On("Shutdown").Return(nil)
 	suite.mockConsumer.On("Shutdown").Return(nil)
-	
+
 	if suite.EventBus != nil {
 		suite.EventBus.Close()
 	}
@@ -137,7 +157,7 @@ func (suite *RocketMQEventBusTestSuite) TestRocketMQSpecificFeatures() {
 		})
 
 		suite.mockConsumer.On("Subscribe", topic, mock.Anything).Return(nil)
-		
+
 		err := suite.EventBus.Subscribe(ctx, topic, func(e event.Event) error {
 			retryCount++
 			if retryCount < maxRetries {

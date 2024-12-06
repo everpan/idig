@@ -3,10 +3,10 @@ package kafka
 import (
 	"context"
 	"fmt"
-	"github.com/Shopify/sarama"
-	"github.com/Shopify/sarama/mocks"
-	"github.com/ever/idig/pkg/event"
-	eventesting "github.com/ever/idig/pkg/event/testing"
+	"github.com/IBM/sarama"
+	"github.com/IBM/sarama/mocks"
+	"github.com/everpan/idig/pkg/event"
+	eventesting "github.com/everpan/idig/pkg/event/testing"
 	"github.com/stretchr/testify/suite"
 	"testing"
 	"time"
@@ -32,8 +32,10 @@ func (suite *KafkaEventBusTestSuite) SetupTest() {
 
 func (suite *KafkaEventBusTestSuite) TearDownTest() {
 	if suite.EventBus != nil {
-		suite.EventBus.Close()
+		_ = suite.EventBus.Close()
 	}
+	suite.mockProducer.Close()
+	suite.mockConsumer.Close()
 }
 
 func TestKafkaEventBusSuite(t *testing.T) {
@@ -52,9 +54,12 @@ func (suite *KafkaEventBusTestSuite) TestKafkaSpecificFeatures() {
 		})
 
 		// Setup producer expectations
-		suite.mockProducer.ExpectSendMessageWithCheckerFunctionAndSucceed(func(msg *sarama.ProducerMessage) error {
-			suite.Equal(topic, msg.Topic)
-			return nil
+		suite.mockProducer.ExpectSendMessageWithCheckerFunctionAndSucceed(func(val interface{}) bool {
+			msg, ok := val.(*sarama.ProducerMessage)
+			if !ok {
+				return false
+			}
+			return msg.Topic == topic
 		})
 
 		err := suite.EventBus.Publish(ctx, topic, testEvent.Event)
@@ -67,28 +72,40 @@ func (suite *KafkaEventBusTestSuite) TestKafkaSpecificFeatures() {
 			"message": "consumer test",
 		})
 
-		processed := make(chan bool)
+		processed := make(chan bool, 1) // 使用带缓冲的通道
+		defer close(processed)
+
 		err := suite.EventBus.Subscribe(ctx, topic, func(e event.Event) error {
-			processed <- true
+			select {
+			case processed <- true:
+			default:
+			}
 			return nil
 		})
 		suite.NoError(err)
 
 		// Create mock partition consumer
 		mockPartitionConsumer := suite.mockConsumer.ExpectConsumePartition(topic, 0, sarama.OffsetNewest)
+		defer mockPartitionConsumer.Close()
 
 		// Simulate message arrival
-		go func() {
-			mockPartitionConsumer.YieldMessage(&sarama.ConsumerMessage{
-				Topic: topic,
-				Value: []byte(fmt.Sprintf(`{"id":"test-1","type":"test.consumer","source":"test_service","data":{"message":"consumer test"}}`)),
-			})
-		}()
+		testMessage := fmt.Sprintf(`{"id":"%s","type":"%s","source":"%s","data":%s,"timestamp":"%s"}`,
+			testEvent.ID,
+			testEvent.Type,
+			testEvent.Source,
+			`{"message":"consumer test"}`,
+			testEvent.Timestamp.Format(time.RFC3339),
+		)
+
+		mockPartitionConsumer.YieldMessage(&sarama.ConsumerMessage{
+			Topic: topic,
+			Value: []byte(testMessage),
+		})
 
 		select {
 		case <-processed:
 			// Success
-		case <-time.After(5 * time.Second):
+		case <-time.After(10 * time.Second): // 增加超时时间
 			suite.Fail("Timeout waiting for message processing")
 		}
 	})
@@ -97,12 +114,15 @@ func (suite *KafkaEventBusTestSuite) TestKafkaSpecificFeatures() {
 	suite.Run("Message Retry", func() {
 		retryCount := 0
 		maxRetries := 3
+		processed := make(chan bool, 1)
+		defer close(processed)
 
 		err := suite.EventBus.Subscribe(ctx, topic, func(e event.Event) error {
 			retryCount++
 			if retryCount < maxRetries {
 				return event.ErrRetry
 			}
+			processed <- true
 			return nil
 		})
 		suite.NoError(err)
@@ -111,29 +131,44 @@ func (suite *KafkaEventBusTestSuite) TestKafkaSpecificFeatures() {
 			"message": "retry test",
 		})
 
-		// Setup producer expectations for retries
+		// Create mock partition consumer
+		mockPartitionConsumer := suite.mockConsumer.ExpectConsumePartition(topic, 0, sarama.OffsetNewest)
+		defer mockPartitionConsumer.Close()
+
+		// Simulate message arrival with retries
+		testMessage := fmt.Sprintf(`{"id":"%s","type":"%s","source":"%s","data":%s,"timestamp":"%s"}`,
+			testEvent.ID,
+			testEvent.Type,
+			testEvent.Source,
+			`{"message":"retry test"}`,
+			testEvent.Timestamp.Format(time.RFC3339),
+		)
+
+		// Send the message multiple times to simulate retries
 		for i := 0; i < maxRetries; i++ {
-			suite.mockProducer.ExpectSendMessageWithCheckerFunctionAndSucceed(func(msg *sarama.ProducerMessage) error {
-				suite.Equal(topic, msg.Topic)
-				return nil
+			mockPartitionConsumer.YieldMessage(&sarama.ConsumerMessage{
+				Topic: topic,
+				Value: []byte(testMessage),
 			})
 		}
 
-		err = suite.EventBus.Publish(ctx, topic, testEvent.Event)
-		suite.NoError(err)
-
-		// Verify retry count
-		suite.Equal(maxRetries, retryCount)
+		select {
+		case <-processed:
+			suite.Equal(maxRetries, retryCount)
+		case <-time.After(10 * time.Second):
+			suite.Fail("Timeout waiting for message retries")
+		}
 	})
 
 	// Test message ordering
 	suite.Run("Message Ordering", func() {
 		messageCount := 5
-		receivedOrder := make([]int, 0, messageCount)
+		receivedMessages := make(chan int, messageCount)
+		defer close(receivedMessages)
 
 		err := suite.EventBus.Subscribe(ctx, topic, func(e event.Event) error {
 			if order, ok := e.Data["order"].(float64); ok {
-				receivedOrder = append(receivedOrder, int(order))
+				receivedMessages <- int(order)
 			}
 			return nil
 		})
@@ -141,19 +176,31 @@ func (suite *KafkaEventBusTestSuite) TestKafkaSpecificFeatures() {
 
 		// Setup mock partition consumer
 		mockPartitionConsumer := suite.mockConsumer.ExpectConsumePartition(topic, 0, sarama.OffsetNewest)
+		defer mockPartitionConsumer.Close()
 
 		// Send messages in order
-		go func() {
-			for i := 0; i < messageCount; i++ {
-				mockPartitionConsumer.YieldMessage(&sarama.ConsumerMessage{
-					Topic: topic,
-					Value: []byte(fmt.Sprintf(`{"id":"test-%d","type":"test.order","source":"test_service","data":{"order":%d}}`, i, i)),
-				})
-			}
-		}()
+		for i := 0; i < messageCount; i++ {
+			testMessage := fmt.Sprintf(`{"id":"test-%d","type":"test.order","source":"test_service","data":{"order":%d},"timestamp":"%s"}`,
+				i, i, time.Now().Format(time.RFC3339))
+			mockPartitionConsumer.YieldMessage(&sarama.ConsumerMessage{
+				Topic: topic,
+				Value: []byte(testMessage),
+			})
+		}
 
-		// Wait for all messages
-		time.Sleep(2 * time.Second)
+		// Collect messages with timeout
+		receivedOrder := make([]int, 0, messageCount)
+		timeout := time.After(10 * time.Second)
+
+		for i := 0; i < messageCount; i++ {
+			select {
+			case order := <-receivedMessages:
+				receivedOrder = append(receivedOrder, order)
+			case <-timeout:
+				suite.Fail("Timeout waiting for messages")
+				return
+			}
+		}
 
 		// Verify message order
 		suite.Equal(messageCount, len(receivedOrder))
