@@ -21,6 +21,17 @@ type Event struct {
 	Processed bool                   `json:"processed" xorm:"bool"`
 }
 
+// NewEvent creates a new event with the given parameters and sets the timestamp
+func NewEvent(id uint64, eventType, source string, data map[string]interface{}) *Event {
+	return &Event{
+		ID:        id,
+		Type:      eventType,
+		Source:    source,
+		Data:      data,
+		Timestamp: time.Now(),
+	}
+}
+
 // Validate checks if the event is valid
 func (e *Event) Validate() error {
 	if e.ID == 0 {

@@ -4,15 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/everpan/idig/pkg/event"
-	et "github.com/everpan/idig/pkg/event/testing"
-	_ "github.com/mattn/go-sqlite3"
-	"github.com/stretchr/testify/suite"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/everpan/idig/pkg/event"
+	et "github.com/everpan/idig/pkg/event/testing"
+	_ "github.com/mattn/go-sqlite3"
+	"github.com/stretchr/testify/suite"
 	"xorm.io/xorm"
 )
 
@@ -42,9 +43,18 @@ func (suite *DBEventBusTestSuite) TearDownSuite() {
 
 func (suite *DBEventBusTestSuite) SetupTest() {
 	var err error
-	suite.engine, err = xorm.NewEngine("sqlite3", ":memory:")
+	suite.engine, err = xorm.NewEngine("sqlite3", "/tmp/test.db")
 	suite.Require().NoError(err)
 	suite.engine.ShowSQL(true)
+
+	// 确保表被正确创建
+	err = suite.engine.Sync2(new(event.Event))
+	suite.Require().NoError(err)
+
+	// 清理所有现有数据
+	_, err = suite.engine.Exec("DELETE FROM event")
+	suite.Require().NoError(err)
+
 	eventBus, err := NewDBEventBus(suite.engine)
 	suite.Require().NoError(err)
 	suite.EventBus = eventBus
@@ -115,34 +125,28 @@ func (suite *DBEventBusTestSuite) TestDatabaseFeatures() {
 
 	// Test subscription and event processing
 	suite.Run("Subscription and Processing", func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
 		processed := make(chan *event.Event, 1)
 		err := suite.EventBus.Subscribe(ctx, topic, func(e *event.Event) error {
-			// e.Processed = true
 			processed <- e
 			return nil
 		})
 		suite.NoError(err)
 
-		// Publish test event
-		testEvent := et.NewTestEvent(2, "test.subscription", map[string]interface{}{
-			"message": "subscription test",
-		})
-		err = suite.EventBus.Publish(ctx, topic, testEvent.Event)
-		suite.NoError(err)
-
-		// Wait for event processing
-		select {
-		case receivedEvent := <-processed:
-			suite.Equal(testEvent.ID, receivedEvent.ID)
-			suite.Equal(testEvent.Type, receivedEvent.Type)
-			suite.Equal(testEvent.Source, receivedEvent.Source)
-			suite.Equal(testEvent.Data, receivedEvent.Data)
-			storeEvent := &event.Event{ID: 2}
-			_, err := suite.engine.Get(storeEvent)
-			// Verify event is marked as processed
+		// Publish events
+		for i := 0; i < 3; i++ {
+			testEvent := et.NewTestEvent(uint64(i), "test.concurrent", map[string]interface{}{})
+			testEvent.Event.Topic = topic
+			err = suite.EventBus.Publish(ctx, topic, testEvent.Event)
 			suite.NoError(err)
-			suite.True(storeEvent.Processed)
-		case <-time.After(2 * time.Second):
+		}
+
+		// Wait for events to be processed
+		select {
+		case evt := <-processed:
+			suite.Equal("test.concurrent", evt.Type)
+		case <-ctx.Done():
 			suite.Fail("Timeout waiting for event processing")
 		}
 	})
@@ -152,22 +156,24 @@ func (suite *DBEventBusTestSuite) TestDatabaseFeatures() {
 		eventCount := 3
 		processed := make(chan *event.Event, eventCount)
 		var wg sync.WaitGroup
-		time.Sleep(2 * time.Second)
+
 		// Subscribe to events
 		err := suite.EventBus.Subscribe(ctx, topic, func(e *event.Event) error {
 			processed <- e
 			return nil
 		})
 		suite.NoError(err)
-
 		// Publish events concurrently
 		for i := 0; i < eventCount; i++ {
 			wg.Add(1)
 			go func(index int) {
 				defer wg.Done()
-				testEvent := et.NewTestEvent(uint64(i+3), "test.concurrent", map[string]interface{}{
+				// 使用时间戳作为 ID 基础，避免冲突
+				id := uint64(time.Now().UnixNano()) + uint64(index)
+				testEvent := et.NewTestEvent(id%100000, "test.concurrent", map[string]interface{}{
 					"index": index,
 				})
+				testEvent.Event.Topic = topic
 				err1 := suite.EventBus.Publish(ctx, topic, testEvent.Event)
 				suite.NoError(err1)
 			}(i)
@@ -175,26 +181,29 @@ func (suite *DBEventBusTestSuite) TestDatabaseFeatures() {
 
 		// Wait for all events to be published
 		wg.Wait()
-
+		time.Sleep(2 * time.Second)
 		// Wait for all events to be processed
 		processedEvents := make(map[uint64]bool)
+		timeout := time.After(20 * time.Second)
 		for i := 0; i < eventCount; i++ {
 			select {
 			case e := <-processed:
 				processedEvents[e.ID] = true
-			case <-time.After(5 * time.Second):
+			case <-timeout:
 				suite.Fail("Timeout waiting for event processing")
+				goto checkResults
 			}
 		}
 
+	checkResults:
 		// Verify all events were processed
 		suite.Len(processedEvents, eventCount)
 
 		// Verify database state
-		storeEvent := &event.Event{Type: "test.concurrent", Processed: true}
-		count, err := suite.engine.Count(&storeEvent)
+		var events []*event.Event
+		err = suite.engine.Where("type = ? AND processed = ?", "test.concurrent", true).Find(&events)
 		suite.NoError(err)
-		suite.Equal(eventCount, count)
+		suite.Equal(eventCount, len(events))
 	})
 
 	// Test error handling

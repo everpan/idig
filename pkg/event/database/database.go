@@ -3,10 +3,11 @@ package database
 import (
 	"context"
 	"fmt"
-	"github.com/everpan/idig/pkg/event"
-	_ "github.com/mattn/go-sqlite3"
 	"sync"
 	"time"
+
+	"github.com/everpan/idig/pkg/event"
+	_ "github.com/mattn/go-sqlite3"
 	"xorm.io/xorm"
 )
 
@@ -18,15 +19,18 @@ type DBEventBus struct {
 
 // NewDBEventBus creates a new database event bus
 func NewDBEventBus(engine *xorm.Engine) (*DBEventBus, error) {
+	// 确保事件表存在
 	err := engine.Sync2(new(event.Event))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to sync database schema: %w", err)
 	}
+
 	return &DBEventBus{
 		engine:   engine,
 		handlers: make(map[string][]func(*event.Event) error),
 	}, nil
 }
+
 func (d *DBEventBus) Publish(ctx context.Context, topic string, evt event.Event) error {
 	if err := evt.Validate(); err != nil {
 		return fmt.Errorf("invalid event: %w", err)
@@ -55,18 +59,30 @@ func (d *DBEventBus) Subscribe(ctx context.Context, topic string, handler func(*
 				return
 			case <-ticker.C:
 				var evs []*event.Event
-				d.engine.Find(&evs, event.Event{Topic: topic, Processed: false})
+				err := d.engine.Where("topic = ? AND processed = ?", topic, false).Find(&evs)
+				if err != nil {
+					continue
+				}
+
 				for _, evt := range evs {
 					d.mu.RLock()
 					handlers := d.handlers[topic]
 					d.mu.RUnlock()
+
+					// 只有所有 handler 都成功时才标记为已处理
+					allSuccess := true
 					for _, h := range handlers {
 						if err := h(evt); err != nil {
-							// Log the error and continue
-							continue
-						} else {
-							evt.Processed = true
-							d.engine.MustCols("processed").Update(evt)
+							allSuccess = false
+							break
+						}
+					}
+
+					if allSuccess {
+						evt.Processed = true
+						_, err := d.engine.ID(evt.ID).Cols("processed").Update(evt)
+						if err != nil {
+							evt.Processed = false
 						}
 					}
 				}
