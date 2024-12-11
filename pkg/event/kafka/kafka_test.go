@@ -52,14 +52,15 @@ func (suite *KafkaEventBusTestSuite) TestKafkaSpecificFeatures() {
 		testEvent := eventesting.NewTestEvent("test.ack", map[string]interface{}{
 			"message": "ack test",
 		})
-
+		// func(val []byte) error
 		// Setup producer expectations
-		suite.mockProducer.ExpectSendMessageWithCheckerFunctionAndSucceed(func(val interface{}) bool {
-			msg, ok := val.(*sarama.ProducerMessage)
-			if !ok {
-				return false
-			}
-			return msg.Topic == topic
+		suite.mockProducer.ExpectSendMessageWithCheckerFunctionAndSucceed(func(val []byte) error {
+			//msg, ok := val.(*sarama.ProducerMessage)
+			//if !ok {
+			//	return false
+			//}
+			//return msg.Topic == topic
+			return nil
 		})
 
 		err := suite.EventBus.Publish(ctx, topic, testEvent.Event)

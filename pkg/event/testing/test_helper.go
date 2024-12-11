@@ -23,10 +23,10 @@ type TestEvent struct {
 }
 
 // NewTestEvent 创建一个测试事件
-func NewTestEvent(eventType string, data map[string]interface{}) TestEvent {
+func NewTestEvent(eventID uint64, eventType string, data map[string]interface{}) TestEvent {
 	return TestEvent{
 		Event: event.Event{
-			ID:        generateID(),
+			ID:        eventID,
 			Type:      eventType,
 			Source:    "test_service",
 			Data:      data,
@@ -34,16 +34,6 @@ func NewTestEvent(eventType string, data map[string]interface{}) TestEvent {
 		},
 		ExpectedData: data,
 	}
-}
-
-var idCounter int
-var idMutex sync.Mutex
-
-func generateID() string {
-	idMutex.Lock()
-	defer idMutex.Unlock()
-	idCounter++
-	return fmt.Sprintf("test-event-%d", idCounter)
 }
 
 // RunEventBusTests 运行所有事件总线测试
@@ -61,13 +51,13 @@ func (suite *EventBusTestSuite) RunEventBusTests() {
 func (suite *EventBusTestSuite) TestBasicPublishSubscribe() {
 	ctx := context.Background()
 	topic := "test.basic"
-	received := make(chan event.Event, 1)
+	received := make(chan *event.Event, 1)
 
-	testEvent := NewTestEvent("test.basic", map[string]interface{}{
+	testEvent := NewTestEvent(uint64(time.Now().UnixNano()), "test.basic", map[string]interface{}{
 		"message": "hello world",
 	})
 
-	err := suite.EventBus.Subscribe(ctx, topic, func(e event.Event) error {
+	err := suite.EventBus.Subscribe(ctx, topic, func(e *event.Event) error {
 		received <- e
 		return nil
 	})
@@ -90,20 +80,20 @@ func (suite *EventBusTestSuite) TestBasicPublishSubscribe() {
 func (suite *EventBusTestSuite) TestMultipleSubscribers() {
 	ctx := context.Background()
 	topic := "test.multiple"
-	received1 := make(chan event.Event, 1)
-	received2 := make(chan event.Event, 1)
+	received1 := make(chan *event.Event, 1)
+	received2 := make(chan *event.Event, 1)
 
-	testEvent := NewTestEvent("test.multiple", map[string]interface{}{
+	testEvent := NewTestEvent(uint64(time.Now().UnixNano()), "test.multiple", map[string]interface{}{
 		"message": "multiple subscribers",
 	})
 
-	err := suite.EventBus.Subscribe(ctx, topic, func(e event.Event) error {
+	err := suite.EventBus.Subscribe(ctx, topic, func(e *event.Event) error {
 		received1 <- e
 		return nil
 	})
 	suite.NoError(err)
 
-	err = suite.EventBus.Subscribe(ctx, topic, func(e event.Event) error {
+	err = suite.EventBus.Subscribe(ctx, topic, func(e *event.Event) error {
 		received2 <- e
 		return nil
 	})
@@ -112,7 +102,7 @@ func (suite *EventBusTestSuite) TestMultipleSubscribers() {
 	err = suite.EventBus.Publish(ctx, topic, testEvent.Event)
 	suite.NoError(err)
 
-	for i, ch := range []chan event.Event{received1, received2} {
+	for i, ch := range []chan *event.Event{received1, received2} {
 		select {
 		case evt := <-ch:
 			suite.Equal(testEvent.ID, evt.ID, "Subscriber %d", i+1)
@@ -128,13 +118,13 @@ func (suite *EventBusTestSuite) TestMultipleSubscribers() {
 func (suite *EventBusTestSuite) TestUnsubscribe() {
 	ctx := context.Background()
 	topic := "test.unsubscribe"
-	received := make(chan event.Event, 1)
+	received := make(chan *event.Event, 1)
 
-	testEvent := NewTestEvent("test.unsubscribe", map[string]interface{}{
+	testEvent := NewTestEvent(uint64(time.Now().UnixNano()), "test.unsubscribe", map[string]interface{}{
 		"message": "unsubscribe test",
 	})
 
-	err := suite.EventBus.Subscribe(ctx, topic, func(e event.Event) error {
+	err := suite.EventBus.Subscribe(ctx, topic, func(e *event.Event) error {
 		received <- e
 		return nil
 	})
@@ -162,7 +152,7 @@ func (suite *EventBusTestSuite) TestConcurrentPublishing() {
 	var mu sync.Mutex
 	eventCount := 100
 
-	err := suite.EventBus.Subscribe(ctx, topic, func(e event.Event) error {
+	err := suite.EventBus.Subscribe(ctx, topic, func(e *event.Event) error {
 		mu.Lock()
 		receivedCount++
 		mu.Unlock()
@@ -175,7 +165,7 @@ func (suite *EventBusTestSuite) TestConcurrentPublishing() {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			testEvent := NewTestEvent("test.concurrent", map[string]interface{}{
+			testEvent := NewTestEvent(uint64(time.Now().UnixNano()), "test.concurrent", map[string]interface{}{
 				"counter": i,
 			})
 			err := suite.EventBus.Publish(ctx, topic, testEvent.Event)
@@ -197,12 +187,12 @@ func (suite *EventBusTestSuite) TestErrorHandling() {
 	topic := "test.error"
 	errorMessage := "test error"
 
-	err := suite.EventBus.Subscribe(ctx, topic, func(e event.Event) error {
+	err := suite.EventBus.Subscribe(ctx, topic, func(e *event.Event) error {
 		return fmt.Errorf(errorMessage)
 	})
 	suite.NoError(err)
 
-	testEvent := NewTestEvent("test.error", map[string]interface{}{
+	testEvent := NewTestEvent(uint64(time.Now().UnixNano()), "test.error", map[string]interface{}{
 		"message": "error test",
 	})
 
@@ -214,7 +204,7 @@ func (suite *EventBusTestSuite) TestErrorHandling() {
 func (suite *EventBusTestSuite) TestLargeEventData() {
 	ctx := context.Background()
 	topic := "test.large"
-	received := make(chan event.Event, 1)
+	received := make(chan *event.Event, 1)
 
 	// 创建大量数据
 	largeData := make(map[string]interface{})
@@ -222,9 +212,9 @@ func (suite *EventBusTestSuite) TestLargeEventData() {
 		largeData[fmt.Sprintf("key-%d", i)] = fmt.Sprintf("value-%d", i)
 	}
 
-	testEvent := NewTestEvent("test.large", largeData)
+	testEvent := NewTestEvent(uint64(time.Now().UnixNano()), "test.large", largeData)
 
-	err := suite.EventBus.Subscribe(ctx, topic, func(e event.Event) error {
+	err := suite.EventBus.Subscribe(ctx, topic, func(e *event.Event) error {
 		received <- e
 		return nil
 	})
@@ -246,13 +236,13 @@ func (suite *EventBusTestSuite) TestLargeEventData() {
 func (suite *EventBusTestSuite) TestMultipleTopics() {
 	ctx := context.Background()
 	topics := []string{"test.topic1", "test.topic2", "test.topic3"}
-	received := make(map[string]chan event.Event)
+	received := make(map[string]chan *event.Event)
 
 	for _, topic := range topics {
-		received[topic] = make(chan event.Event, 1)
+		received[topic] = make(chan *event.Event, 1)
 		topicCopy := topic // Capture topic in closure
 
-		err := suite.EventBus.Subscribe(ctx, topicCopy, func(e event.Event) error {
+		err := suite.EventBus.Subscribe(ctx, topicCopy, func(e *event.Event) error {
 			received[topicCopy] <- e
 			return nil
 		})
@@ -260,7 +250,7 @@ func (suite *EventBusTestSuite) TestMultipleTopics() {
 	}
 
 	for _, topic := range topics {
-		testEvent := NewTestEvent(topic, map[string]interface{}{
+		testEvent := NewTestEvent(uint64(time.Now().UnixNano()), topic, map[string]interface{}{
 			"topic": topic,
 		})
 		err := suite.EventBus.Publish(ctx, topic, testEvent.Event)
