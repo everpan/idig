@@ -30,100 +30,135 @@ func init() {
 	config.RegisterRouter(dmlRoutes)
 }
 
-// dmlUpdate 多值update,自动寻找 pk uk
-func dmlUpdate(ctx *config.Context) error {
-	// 1. 根据pk更新
-	// 2. 根据其中一个uk更新
+func parseToColumnValue(ctx *config.Context) (string, *query.ColumnValue, error) {
+	fb := ctx.Fiber()
+	data := fb.Body()
+	entityName := fb.Params("entity")
+	if entityName == "" {
+		return "", nil, fmt.Errorf("entity name required")
+	}
+	cv := &query.ColumnValue{}
+	err := cv.ParseValues(data)
+	return entityName, cv, err
+}
+
+// prepareEntityOperation 准备实体操作的通用逻辑
+func prepareEntityOperation(ctx *config.Context) (*query.ColumnValue, *meta.EntityMeta, *xorm.Engine, error) {
 	entityName, cv, err := parseToColumnValue(ctx)
 	if err != nil {
-		return ctx.SendBadRequestError(err)
+		return nil, nil, nil, err
 	}
 	engine := ctx.Engine()
 	m, err := meta.AcquireMeta(entityName, engine)
 	if err != nil {
+		return nil, nil, nil, err
+	}
+	return cv, m, engine, nil
+}
+
+// handleTransaction 处理事务的通用逻辑
+func handleTransaction(engine *xorm.Engine, operation func(*xorm.Session) error) error {
+	sess := engine.NewSession()
+	defer func(sess *xorm.Session) {
+		_ = sess.Close()
+	}(sess)
+
+	if err := operation(sess); err != nil {
+		_ = sess.Rollback()
+		return err
+	}
+
+	return sess.Commit()
+}
+
+// dmlUpdate 多值update,自动寻找 pk uk
+func dmlUpdate(ctx *config.Context) error {
+	cv, m, engine, err := prepareEntityOperation(ctx)
+	dt := cv.DataTable()
+	if err != nil {
 		return ctx.SendBadRequestError(err)
 	}
-	// pkTable := m.PrimaryTable()
-	dt := cv.DataTable()
+
 	pkColumn := m.PrimaryColumn()
 	pkId := dt.FetchColumnIndex(pkColumn)
-	if pkId < 0 { //not found
+	if pkId < 0 {
 		return ctx.SendJSON(-2, "not implement", nil)
-	} else {
-		if tabCols, err1 := dt.DivisionColumnsToTable(m, true); err1 != nil {
-			return ctx.SendBadRequestError(err1)
-		} else {
-			sess := engine.NewSession()
-			defer func(sess *xorm.Session) {
-				_ = sess.Close()
-			}(sess)
-			for t, c := range tabCols {
-				err2 := UpdateEntity(engine, sess, t, c, []string{pkColumn}, dt)
-				if err2 != nil {
-					return ctx.SendJSON(-1, "update entity error", err2.Error())
-				}
-			}
-			if err3 := sess.Commit(); err3 != nil {
-				return ctx.SendJSON(-1, "update commit error", err3.Error())
+	}
+
+	tabCols, err := dt.DivisionColumnsToTable(m, true)
+	if err != nil {
+		return ctx.SendBadRequestError(err)
+	}
+
+	err = handleTransaction(engine, func(sess *xorm.Session) error {
+		for t, c := range tabCols {
+			if err := UpdateEntity(engine, sess, t, c, []string{pkColumn}, dt); err != nil {
+				return fmt.Errorf("update entity error: %w", err)
 			}
 		}
+		return nil
+	})
 
+	if err != nil {
+		return ctx.SendJSON(-1, "update error", err.Error())
 	}
 	return nil
 }
 
 func dmlInsert(ctx *config.Context) error {
-	entityName, cv, err := parseToColumnValue(ctx)
+	cv, m, engine, err := prepareEntityOperation(ctx)
+	dt := cv.DataTable()
 	if err != nil {
 		return ctx.SendJSON(-1, "parse column values error", err.Error())
 	}
-	engine := ctx.Engine()
-	m, err := meta.AcquireMeta(entityName, engine)
-	if err != nil {
-		return ctx.SendJSON(-1, "acquire meta error", err.Error())
-	}
-	dt := cv.DataTable()
+
 	pkColumn := m.PrimaryColumn()
 	pkId := dt.FetchColumnIndex(pkColumn)
 	hasAutoIncrement := m.HasAutoIncrement()
+
 	if !hasAutoIncrement && pkId < 0 {
-		// 非自增表，无主键，不能插入
 		return ctx.SendBadRequestError(fmt.Errorf("primary key required"))
 	}
-	pkId = dt.AddColumn(pkColumn) // 增加主键，参与分组
+
+	pkId = dt.AddColumn(pkColumn)
 	tableCols, err := dt.DivisionColumnsToTable(m, true)
 	if err != nil {
 		return ctx.SendJSON(-1, "can't division entity to attrs groups", err.Error())
 	}
-	// insert pk table
+
 	pkTable := m.PrimaryTable()
 	pkCols, ok := tableCols[pkTable]
 	if !ok {
 		return ctx.SendJSON(-1, "no values for primary table", nil)
 	}
+
 	if hasAutoIncrement {
 		pkCols = slices.Clone(pkCols)
 		pkCols = slices.DeleteFunc(pkCols, func(s string) bool {
 			return s == pkColumn
 		})
 	}
-	sess := engine.NewSession()
-	defer func(sess *xorm.Session) {
-		_ = sess.Close()
-	}(sess)
-	insertCount, err2 := InsertEntity(engine, sess, pkTable, pkCols, dt, hasAutoIncrement, pkId)
-	if err2 != nil {
-		return ctx.SendJSON(-1, "insert data error", err2.Error())
-	}
-	delete(tableCols, pkTable)
-	for table, cols := range tableCols {
-		_, err = InsertEntity(engine, sess, table, cols, dt, false, 0)
+
+	var insertCount int
+	err = handleTransaction(engine, func(sess *xorm.Session) error {
+		count, err := InsertEntity(engine, sess, pkTable, pkCols, dt, hasAutoIncrement, pkId)
 		if err != nil {
-			return ctx.SendJSON(-1, "insert data error", err.Error())
+			return fmt.Errorf("insert data error: %w", err)
 		}
-	}
-	if err = sess.Commit(); err != nil {
-		return ctx.SendJSON(-1, "commit session error", err.Error())
+		insertCount = count
+
+		delete(tableCols, pkTable)
+		for table, cols := range tableCols {
+			_, err = InsertEntity(engine, sess, table, cols, dt, false, 0)
+			if err != nil {
+				return fmt.Errorf("insert data error: %w", err)
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		return ctx.SendJSON(-1, "insert error", err.Error())
 	}
 	return ctx.SendSuccess(fmt.Sprintf("insert %d rows", insertCount))
 }
@@ -204,16 +239,4 @@ func InsertEntity(engine *xorm.Engine, sess *xorm.Session, table string, cols []
 		}
 	}
 	return insertCount, nil
-}
-
-func parseToColumnValue(ctx *config.Context) (string, *query.ColumnValue, error) {
-	fb := ctx.Fiber()
-	data := fb.Body()
-	entityName := fb.Params("entity")
-	if entityName == "" {
-		return "", nil, fmt.Errorf("entity name required")
-	}
-	cv := &query.ColumnValue{}
-	err := cv.ParseValues(data)
-	return entityName, cv, err
 }

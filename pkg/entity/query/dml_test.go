@@ -100,7 +100,7 @@ func Test_parseValues(t *testing.T) {
 /*
 func TestSubdivisionColumValueToTable(t *testing.T) {
 	var (
-		m = &meta.Meta{
+		m = &meta.EntityMeta{
 			ColumnIndex: map[string]*schemas.Column{
 				"pk": {TableName: "t0"},
 				"a":  {TableName: "t1"},
@@ -125,7 +125,7 @@ func TestSubdivisionColumValueToTable(t *testing.T) {
 	)
 	tests := []struct {
 		name string
-		m    *meta.Meta
+		m    *meta.EntityMeta
 		cv   *ColumnValue
 		want func(ret map[string]*ColumnValue, err error)
 	}{
