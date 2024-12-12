@@ -168,7 +168,7 @@ func getMetaFromDB(entityName string, engine *xorm.Engine) (*EntityMeta, error) 
 	if err != nil {
 		return nil, err
 	}
-	// 如果attrs中不包含主表，则添加一个虚拟的
+	// 如果attrs中不包含主表，则添加一个虚拟的att节点
 	meta := &EntityMeta{
 		Entity:     e,
 		AttrGroups: a,

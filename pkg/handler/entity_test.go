@@ -2,16 +2,17 @@ package handler
 
 import (
 	"bytes"
-	"github.com/everpan/idig/pkg/core"
-	"github.com/everpan/idig/pkg/entity/meta"
-	"github.com/gofiber/fiber/v2"
-	"github.com/stretchr/testify/assert"
-	"github.com/valyala/fasthttp"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/everpan/idig/pkg/core"
+	"github.com/everpan/idig/pkg/entity/meta"
+	"github.com/gofiber/fiber/v2"
+	"github.com/stretchr/testify/assert"
+	"github.com/valyala/fasthttp"
 )
 
 type Student0 struct {
@@ -29,71 +30,77 @@ type Student1 struct {
 
 func TestDM_INSERT(t *testing.T) {
 	tenant := core.DefaultTenant
-	engine, _ := core.GetEngine(tenant.Driver, tenant.DataSource)
-	engine.Sync2(new(Student0), new(Student1))
-	_, err := meta.RegisterEntity(engine, "student", "Stu Test", "student0", "idx")
-	//meta.
-	if err != nil {
-		t.Logf("register entity err: %v", err)
-	}
+	engine, err := core.GetEngine(tenant.Driver, tenant.DataSource)
+	assert.NoError(t, err)
+	engine.DropTables(new(Student0), new(Student1))
+	engine.Truncate(new(meta.Entity), new(meta.AttrGroup))
+	err = engine.Sync2(new(Student0), new(Student1))
+	assert.NoError(t, err)
+
+	_, err = meta.RegisterEntity(engine, "student", "Stu Test", "student0", "idx")
+	assert.NoError(t, err)
+
 	_, err = meta.AddEntityAttrGroupByName(engine, "student", "g1", "student1")
-	if err != nil {
-		t.Logf("add entity err: %v", err)
-	}
+	assert.NoError(t, err)
+
 	smeta, err := meta.AcquireMeta("student", engine)
-	assert.Nil(t, err)
-	t.Logf("student %v \n", string(smeta.ToJMeta().ToJson()))
+	assert.NoError(t, err)
 	assert.Equal(t, 2, len(smeta.AttrTables))
+
 	app := core.CreateApp()
 	tests := []struct {
 		name   string
 		req    string
 		entity string
-		check  func(string, error)
+		check  func(*testing.T, string, error)
 	}{
-		{"insert new uk is null", `{"vals":{"name":"nam1","card":"c1","gender":"male"}}`, "student",
-			func(body string, err error) {
-				// sqlite unique null 的情况下 可以反复插入
-				assert.Contains(t, body, "insert 1 rows")
-			}},
-		{"column is not exit", `{"vals":{"not-exit":"not exist","name":"nam1","card":"c1","gender":"male"}}`, "student",
-			func(body string, err error) {
-				assert.Contains(t, body, `"data":"column 'not-exit' not found"`)
-			}},
-		{"uk", `{"vals":{"mobile":"uk1","name":"nam1","card":"c1","gender":"male"}}`, "student",
-			func(body string, err error) {
-				var chk = strings.Contains(body, "insert 1 rows") || strings.Contains(body, "UNIQUE constraint failed")
-				assert.True(t, chk)
-			}},
-		{"multi values", `{"vals":[{"mobile":"uk21","name":"nam1","card":"c1","gender":"male"},
-{"mobile":"uk22","name":"nam1","card":"c1","gender":"male"}]}`, "student",
-			func(body string, err error) {
-				var chk = strings.Contains(body, "insert 2 rows") || strings.Contains(body, "UNIQUE constraint failed")
-				assert.True(t, chk)
-			}},
-		{"array values", `{"cols":["mobile","name","card","gender","class_id"],
-"vals":[["uk321","nam1","c1","male",234],["uk322","nam1","c1","male",245]]}`, "student",
-			func(body string, err error) {
-				var chk = strings.Contains(body, "insert 2 rows") || strings.Contains(body, "UNIQUE constraint failed")
-				assert.True(t, chk)
-			}},
-		{"pk table empty", `{"cols":["gender","class_id"],"vals":[["uk321","nam1"],["male",245]]}`, "student",
-			func(body string, err error) {
-				assert.Contains(t, body, `cols is empty`)
-			}},
+		{"Insert with null unique key", `{"vals":{"name":"nam1","card":"c1","gender":"male"}}`, "student", checkInsertSuccess},
+		{"Column does not exist", `{"vals":{"not-exit":"not exist","name":"nam1","card":"c1","gender":"male"}}`, "student", checkColumnNotFound},
+		{"Insert with unique key", `{"vals":{"mobile":"uk1","name":"nam1","card":"c1","gender":"male"}}`, "student", checkUniqueKeyConstraint},
+		{"Insert multiple values", `{"vals":[{"mobile":"uk21","name":"nam1","card":"c1","gender":"male"},{"mobile":"uk22","name":"nam1","card":"c1","gender":"male"}]}`, "student", checkInsertMultipleSuccess},
+		{"Insert array values", `{"cols":["mobile","name","card","gender","class_id"],"vals":[["uk321","nam1","c1","male",234],["uk322","nam1","c1","male",245]]}`, "student", checkInsertArraySuccess},
+		{"Primary key table empty", `{"cols":["gender","class_id"],"vals":[["uk321","nam1"],["male",245]]}`, "student", checkEmptyCols},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/entity/dm/"+tt.entity, bytes.NewReader([]byte(tt.req)))
 			resp, err := app.Test(req, -1)
-			// assert.Nil(t, err)
+			assert.NoError(t, err)
+
 			body, err := io.ReadAll(resp.Body)
+			assert.NoError(t, err)
+
 			t.Log(tt.name, string(body))
 			if tt.check != nil {
-				tt.check(string(body), err)
+				tt.check(t, string(body), err)
 			}
 		})
 	}
+}
+
+func checkInsertSuccess(t *testing.T, body string, err error) {
+	assert.Contains(t, body, "insert 1 rows")
+}
+
+func checkColumnNotFound(t *testing.T, body string, err error) {
+	assert.Contains(t, body, `"data":"column 'not-exit' not found"`)
+}
+
+func checkUniqueKeyConstraint(t *testing.T, body string, err error) {
+	assert.True(t, strings.Contains(body, "insert 1 rows") || strings.Contains(body, "UNIQUE constraint failed"))
+}
+
+func checkInsertMultipleSuccess(t *testing.T, body string, err error) {
+	assert.True(t, strings.Contains(body, "insert 2 rows") || strings.Contains(body, "UNIQUE constraint failed"))
+}
+
+func checkInsertArraySuccess(t *testing.T, body string, err error) {
+	assert.True(t, strings.Contains(body, "insert 2 rows") || strings.Contains(body, "UNIQUE constraint failed"))
+}
+
+func checkEmptyCols(t *testing.T, body string, err error) {
+	assert.Contains(t, body, `cols is empty`)
 }
 
 func TestDM_Update(t *testing.T) {
@@ -145,7 +152,7 @@ func TestDM_Update(t *testing.T) {
 	tests := []struct {
 		name  string
 		body  string
-		check func(body string, err error)
+		check func(*testing.T, string, error)
 	}{
 		{
 			name: "update single field",
@@ -157,7 +164,7 @@ func TestDM_Update(t *testing.T) {
 					"name": "updated_test1"
 				}
 			}`,
-			check: func(body string, err error) {
+			check: func(t *testing.T, body string, err error) {
 				if err != nil {
 					t.Errorf("update failed: %v", err)
 				}
@@ -184,7 +191,7 @@ func TestDM_Update(t *testing.T) {
 					"gender": "2"
 				}
 			}`,
-			check: func(body string, err error) {
+			check: func(t *testing.T, body string, err error) {
 				if err != nil {
 					t.Errorf("update failed: %v", err)
 				}
@@ -214,7 +221,7 @@ func TestDM_Update(t *testing.T) {
 					"name": "updated_test3"
 				}
 			}`,
-			check: func(body string, err error) {
+			check: func(t *testing.T, body string, err error) {
 				if err != nil {
 					t.Errorf("update failed: %v", err)
 				}
@@ -242,7 +249,7 @@ func TestDM_Update(t *testing.T) {
 					"card": "updated_card"
 				}
 			}`,
-			check: func(body string, err error) {
+			check: func(t *testing.T, body string, err error) {
 				if err != nil {
 					t.Errorf("update failed: %v", err)
 				}
@@ -277,7 +284,7 @@ func TestDM_Update(t *testing.T) {
 			body := []byte(tt.body)
 			//err = updateData(ctx, body)
 			if tt.check != nil {
-				tt.check(string(body), err)
+				tt.check(t, string(body), err)
 			}
 		})
 	}
