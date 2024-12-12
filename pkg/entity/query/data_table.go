@@ -129,6 +129,10 @@ func (dt *DataTable) parseMultiValues(vals []any) error {
 	for i, a := range vals {
 		switch r1 := a.(type) {
 		case []any:
+			// 检查行长度与列长度是否匹配
+			if len(r1) != len(dt.cols) {
+				return fmt.Errorf("row cols len:%d is not equal to cols len:%d", len(r1), len(dt.Columns()))
+			}
 			if err := dt.AddRow(r1); err != nil {
 				return err
 			}

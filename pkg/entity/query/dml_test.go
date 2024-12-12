@@ -2,9 +2,8 @@ package query
 
 import (
 	"github.com/goccy/go-json"
-	"testing"
-	// "encoding/json"
 	"github.com/stretchr/testify/assert"
+	"testing"
 )
 
 func Test_arrayList(t *testing.T) {
@@ -95,6 +94,79 @@ func Test_parseValues(t *testing.T) {
 			tt.want(dml, err)
 		})
 	}
+}
+
+func TestAddColumn(t *testing.T) {
+	dt := NewDataTable()
+	assert.Equal(t, 0, dt.AddColumn("column1"))
+	assert.Equal(t, 1, dt.AddColumn("column2"))
+	assert.Equal(t, 0, dt.AddColumn("column1")) // 重复列
+}
+
+func TestAddRow(t *testing.T) {
+	dt := NewDataTable()
+	dt.AddColumn("column1")
+	dt.AddColumn("column2")
+
+	// 添加有效行
+	assert.Nil(t, dt.AddRow([]any{"value1", 2}))
+	assert.Equal(t, 1, len(dt.Values()))
+
+	// 添加不匹配的行
+	assert.NotNil(t, dt.AddRow([]any{"only_one_value"}))
+}
+
+func TestFetchRowData(t *testing.T) {
+	dt := NewDataTable()
+	dt.AddColumn("column1")
+	dt.AddRow([]any{"value1"})
+
+	// 测试有效索引
+	data, err := dt.FetchRowData(0, []int{0})
+	assert.Nil(t, err)
+	assert.Equal(t, "value1", data[0])
+
+	// 测试无效索引
+	_, err = dt.FetchRowData(1, []int{0})
+	assert.NotNil(t, err)
+}
+
+func TestValidIndex(t *testing.T) {
+	dt := NewDataTable()
+	dt.AddColumn("column1")
+	dt.AddRow([]any{"value1"})
+
+	// 测试有效索引
+	err := dt.ValidIndex([]int{0})
+	assert.Nil(t, err)
+
+	// 测试无效索引
+	err = dt.ValidIndex([]int{1})
+	assert.NotNil(t, err)
+}
+
+func TestParseKeyCols(t *testing.T) {
+	dt := NewDataTable()
+	raw := map[string]any{
+		"cols": []any{"column1", "column2"},
+	}
+
+	assert.Nil(t, dt.ParseKeyCols(raw))
+	assert.Equal(t, 2, len(dt.Columns()))
+}
+
+func TestParseKeyVals(t *testing.T) {
+	dt := NewDataTable()
+	dt.cols = []string{"column1", "column2"}
+	raw := map[string]any{
+		"vals": []any{
+			[]any{"value1", 1},
+			[]any{"value2", 2},
+		},
+	}
+
+	assert.Nil(t, dt.ParseKeyVals(raw))
+	assert.Equal(t, 2, len(dt.Values()))
 }
 
 /*

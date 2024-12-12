@@ -1,6 +1,7 @@
 package config
 
 import (
+	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
 	"sync"
 	"xorm.io/xorm"

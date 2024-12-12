@@ -5,6 +5,7 @@ go 1.23.3
 require (
 	github.com/IBM/sarama v1.43.3
 	github.com/apache/rocketmq-client-go/v2 v2.1.2
+	github.com/go-sql-driver/mysql v1.7.0
 	github.com/goccy/go-json v0.10.3
 	github.com/gofiber/contrib/fiberzap/v2 v2.1.4
 	github.com/gofiber/fiber/v2 v2.52.5

@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/spf13/viper"
@@ -64,31 +63,9 @@ var (
 	tenantCache  = sync.Map{}
 )
 
-func (t *Tenant) CreateEngine() (*xorm.Engine, error) {
-	return xorm.NewEngine(t.Driver, t.DataSource)
-}
-
 func GetFromCache(uid string) *Tenant {
 	if v, ok := tenantCache.Load(uid); ok {
 		return v.(*Tenant)
 	}
 	return nil
-}
-
-func GetFromDBThenCached(uid string, engine *xorm.Engine) (*Tenant, error) {
-	if engine == nil {
-		return DefaultTenant, nil
-	}
-	t := &Tenant{
-		TenantUid: uid, Status: 1,
-	}
-	has, err := engine.Get(t)
-	if err != nil {
-		return nil, err
-	}
-	if !has {
-		return nil, fmt.Errorf("tenant:%s not exist or status != 1", uid)
-	}
-	tenantCache.Store(uid, t)
-	return t, nil
 }

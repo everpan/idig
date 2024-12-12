@@ -176,7 +176,10 @@ func UpdateEntity(engine *xorm.Engine, sess *xorm.Session, table string, cols []
 	if valIdx, err = dt.FetchColumnsIndex(cols); err != nil {
 		return err
 	}
-	vals = dt.FetchRowData(0, valIdx)
+	vals, err = dt.FetchRowData(0, valIdx)
+	if err != nil {
+		return err
+	}
 	for i, col := range keyCols {
 		if pkCond == nil {
 			pkCond = builder.Eq{col: pkVals[i]}
@@ -195,7 +198,7 @@ func UpdateEntity(engine *xorm.Engine, sess *xorm.Session, table string, cols []
 		return err
 	}
 	for i := range dt.Values() {
-		args := dt.FetchRowDataWithSQL(i, valIdx, sql)
+		args, _ := dt.FetchRowDataWithSQL(i, valIdx, sql)
 		_, err2 := sess.Exec(args...)
 		if err2 != nil {
 			return err
@@ -214,7 +217,11 @@ func InsertEntity(engine *xorm.Engine, sess *xorm.Session, table string, cols []
 	if err != nil {
 		return 0, err
 	}
-	bld := query.BuildInsertSQL(engine.DriverName(), table, cols, dt.FetchRowData(0, pkColsIndex))
+	rd, err := dt.FetchRowData(0, pkColsIndex)
+	if err != nil {
+		return 0, err
+	}
+	bld := query.BuildInsertSQL(engine.DriverName(), table, cols, rd)
 	sqlStr, _, err := bld.ToSQL()
 	logger.Info("InsertEntity", zap.String("sql", sqlStr), zap.Int("row count", len(dt.Values())))
 	if err != nil {
@@ -222,7 +229,10 @@ func InsertEntity(engine *xorm.Engine, sess *xorm.Session, table string, cols []
 	}
 	insertCount := 0
 	for rowId := range dt.Values() {
-		args := dt.FetchRowDataWithSQL(rowId, pkColsIndex, sqlStr)
+		args, err := dt.FetchRowDataWithSQL(rowId, pkColsIndex, sqlStr)
+		if err != nil {
+			return 0, err
+		}
 		if ret, err1 := sess.Exec(args...); err1 != nil {
 			return 0, err1
 		} else {

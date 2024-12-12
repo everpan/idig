@@ -7,10 +7,10 @@ import (
 
 type ReloadConfigFunc func() error
 
-var reloadConfigFuncs []ReloadConfigFunc
+var reloadConfigFunc []ReloadConfigFunc
 
 func RegisterReloadConfigFunc(fn ReloadConfigFunc) {
-	reloadConfigFuncs = append(reloadConfigFuncs, fn)
+	reloadConfigFunc = append(reloadConfigFunc, fn)
 }
 
 func ReloadConfig() error {
@@ -19,7 +19,7 @@ func ReloadConfig() error {
 		// return err
 		panic(fmt.Errorf("Fatal error config file: %w \n", err))
 	}
-	for _, f := range reloadConfigFuncs {
+	for _, f := range reloadConfigFunc {
 		if err = f(); err != nil {
 			return err
 		}
