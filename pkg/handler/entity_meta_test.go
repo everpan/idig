@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"github.com/everpan/idig/pkg/config"
 	"github.com/everpan/idig/pkg/core"
 	_ "github.com/everpan/idig/pkg/entity"
 	"github.com/everpan/idig/pkg/entity/meta"
@@ -20,7 +19,7 @@ func Test_getMeta(t *testing.T) {
 		PkAttrColumn: "not-attr-entity",
 		Status:       1,
 	}
-	engine, _ := config.GetEngine(config.DefaultTenant.Driver, config.DefaultTenant.DataSource)
+	engine, _ := core.GetEngine(core.DefaultTenant.Driver, core.DefaultTenant.DataSource)
 	_, _ = engine.Insert(noAttEntity)
 	tests := []struct {
 		name     string

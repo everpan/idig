@@ -1,7 +1,7 @@
 package entity
 
 import (
-	"github.com/everpan/idig/pkg/config"
+	"github.com/everpan/idig/pkg/core"
 	"github.com/everpan/idig/pkg/entity/meta"
 	"sync"
 	"xorm.io/xorm"
@@ -29,7 +29,7 @@ func InitRelationTable(engine *xorm.Engine) error {
 }
 
 func init() {
-	config.RegisterInitTableFunction(InitRelationTable)
+	core.RegisterInitTableFunction(InitRelationTable)
 }
 
 var (

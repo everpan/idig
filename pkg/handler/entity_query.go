@@ -3,15 +3,15 @@ package handler
 import (
 	"encoding/base64"
 	"fmt"
+	"github.com/everpan/idig/pkg/core"
 
-	"github.com/everpan/idig/pkg/config"
 	"github.com/everpan/idig/pkg/entity/query"
 	"github.com/gofiber/fiber/v2"
 	"go.uber.org/zap"
 	"xorm.io/builder"
 )
 
-var queryRoutes = []*config.IDigRoute{
+var queryRoutes = []*core.IDigRoute{
 	{
 		Path:    "/entity/dq", // data query
 		Handler: queryPost,
@@ -23,13 +23,13 @@ var queryRoutes = []*config.IDigRoute{
 		Method:  fiber.MethodGet,
 	},
 }
-var logger = config.GetLogger()
+var logger = core.GetLogger()
 
 func init() {
-	config.RegisterRouter(queryRoutes)
+	core.RegisterRouter(queryRoutes)
 }
 
-func paramQuery(ctx *config.Context) error {
+func paramQuery(ctx *core.Context) error {
 	qStr := ctx.Fiber().Params("q", "")
 	if qStr == "" {
 		return ctx.SendBadRequestError(fmt.Errorf("q is empty"))
@@ -41,13 +41,13 @@ func paramQuery(ctx *config.Context) error {
 	return queryData(ctx, qData)
 }
 
-func queryPost(ctx *config.Context) error {
+func queryPost(ctx *core.Context) error {
 	qData := ctx.Fiber().Body()
 	return queryData(ctx, qData)
 }
 
 // queryData 从query的dsl中，通过entity 查询数据
-func queryData(ctx *config.Context, data []byte) error {
+func queryData(ctx *core.Context, data []byte) error {
 	tenant := ctx.Tenant()
 	if tenant == nil {
 		return ctx.SendBadRequestError(fmt.Errorf("tenant not found"))

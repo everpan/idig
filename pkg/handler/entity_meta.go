@@ -2,13 +2,13 @@ package handler
 
 import (
 	"fmt"
+	"github.com/everpan/idig/pkg/core"
 
-	"github.com/everpan/idig/pkg/config"
 	"github.com/everpan/idig/pkg/entity/meta"
 	"github.com/gofiber/fiber/v2"
 )
 
-var routes = []*config.IDigRoute{
+var routes = []*core.IDigRoute{
 	{
 		Path:    "/entity/meta/:entity",
 		Handler: getMeta,
@@ -17,10 +17,10 @@ var routes = []*config.IDigRoute{
 }
 
 func init() {
-	config.RegisterRouter(routes)
+	core.RegisterRouter(routes)
 }
 
-func getMeta(c *config.Context) error {
+func getMeta(c *core.Context) error {
 	eName := c.Fiber().Params("entity")
 	if eName == "" {
 		c.SendBadRequestError(fmt.Errorf("no entity specified"))

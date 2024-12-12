@@ -1,4 +1,4 @@
-package config
+package core
 
 import (
 	"github.com/gofiber/fiber/v2"

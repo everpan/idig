@@ -1,6 +1,7 @@
-package config
+package core
 
 import (
+	"github.com/everpan/idig/pkg/config"
 	"sync"
 
 	"github.com/spf13/viper"
@@ -38,7 +39,7 @@ func init() {
 	viper.SetDefault("tenant.default.driver", DefaultTenant.Driver)
 	viper.SetDefault("tenant.default.data-source", DefaultTenant.DataSource)
 	viper.SetDefault("tenant.http-header-key", TenantHeader)
-	RegisterReloadConfigFunc(ReloadTenantConfig)
+	config.RegisterReloadConfigFunc(ReloadTenantConfig)
 }
 
 func ReloadTenantConfig() error {

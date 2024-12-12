@@ -3,7 +3,7 @@ package meta
 import (
 	"crypto/md5"
 	"fmt"
-	"github.com/everpan/idig/pkg/config"
+	"github.com/everpan/idig/pkg/core"
 	"github.com/goccy/go-json"
 	"sync"
 	"xorm.io/xorm"
@@ -53,12 +53,12 @@ func InitEntityTable(engine *xorm.Engine) error {
 	}
 	_, _ = RegisterEntity(engine, "entity", "实体信息", (&Entity{}).TableName(), "entity_id")
 	_, _ = RegisterEntity(engine, "entity_attr_group", "实体属性组信息", (&AttrGroup{}).TableName(), "group_idx")
-	_, _ = RegisterEntity(engine, "tenant", "租户信息", (&config.Tenant{}).TableName(), "tenant_idx")
+	_, _ = RegisterEntity(engine, "tenant", "租户信息", (&core.Tenant{}).TableName(), "tenant_idx")
 	return err
 }
 
 func init() {
-	config.RegisterInitTableFunction(InitEntityTable)
+	core.RegisterInitTableFunction(InitEntityTable)
 }
 
 var (

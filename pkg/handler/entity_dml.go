@@ -2,9 +2,9 @@ package handler
 
 import (
 	"fmt"
+	"github.com/everpan/idig/pkg/core"
 	"slices"
 
-	"github.com/everpan/idig/pkg/config"
 	"github.com/everpan/idig/pkg/entity/meta"
 	"github.com/everpan/idig/pkg/entity/query"
 	"github.com/gofiber/fiber/v2"
@@ -13,7 +13,7 @@ import (
 	"xorm.io/xorm"
 )
 
-var dmlRoutes = []*config.IDigRoute{
+var dmlRoutes = []*core.IDigRoute{
 	{
 		Path:    "/entity/dm/:entity?", // data query
 		Handler: dmlInsert,
@@ -27,10 +27,10 @@ var dmlRoutes = []*config.IDigRoute{
 }
 
 func init() {
-	config.RegisterRouter(dmlRoutes)
+	core.RegisterRouter(dmlRoutes)
 }
 
-func parseToColumnValue(ctx *config.Context) (string, *query.ColumnValue, error) {
+func parseToColumnValue(ctx *core.Context) (string, *query.ColumnValue, error) {
 	fb := ctx.Fiber()
 	data := fb.Body()
 	entityName := fb.Params("entity")
@@ -43,7 +43,7 @@ func parseToColumnValue(ctx *config.Context) (string, *query.ColumnValue, error)
 }
 
 // prepareEntityOperation 准备实体操作的通用逻辑
-func prepareEntityOperation(ctx *config.Context) (*query.ColumnValue, *meta.EntityMeta, *xorm.Engine, error) {
+func prepareEntityOperation(ctx *core.Context) (*query.ColumnValue, *meta.EntityMeta, *xorm.Engine, error) {
 	entityName, cv, err := parseToColumnValue(ctx)
 	if err != nil {
 		return nil, nil, nil, err
@@ -72,7 +72,7 @@ func handleTransaction(engine *xorm.Engine, operation func(*xorm.Session) error)
 }
 
 // dmlUpdate 多值update,自动寻找 pk uk
-func dmlUpdate(ctx *config.Context) error {
+func dmlUpdate(ctx *core.Context) error {
 	cv, m, engine, err := prepareEntityOperation(ctx)
 	dt := cv.DataTable()
 	if err != nil {
@@ -105,7 +105,7 @@ func dmlUpdate(ctx *config.Context) error {
 	return nil
 }
 
-func dmlInsert(ctx *config.Context) error {
+func dmlInsert(ctx *core.Context) error {
 	cv, m, engine, err := prepareEntityOperation(ctx)
 	dt := cv.DataTable()
 	if err != nil {

@@ -2,7 +2,6 @@ package handler
 
 import (
 	"bytes"
-	"github.com/everpan/idig/pkg/config"
 	"github.com/everpan/idig/pkg/core"
 	"github.com/everpan/idig/pkg/entity/meta"
 	"github.com/gofiber/fiber/v2"
@@ -29,8 +28,8 @@ type Student1 struct {
 }
 
 func TestDM_INSERT(t *testing.T) {
-	tenant := config.DefaultTenant
-	engine, _ := config.GetEngine(tenant.Driver, tenant.DataSource)
+	tenant := core.DefaultTenant
+	engine, _ := core.GetEngine(tenant.Driver, tenant.DataSource)
 	engine.Sync2(new(Student0), new(Student1))
 	_, err := meta.RegisterEntity(engine, "student", "Stu Test", "student0", "idx")
 	//meta.
@@ -98,12 +97,12 @@ func TestDM_INSERT(t *testing.T) {
 }
 
 func TestDM_Update(t *testing.T) {
-	tenant := config.DefaultTenant
-	engine, _ := config.GetEngine(tenant.Driver, tenant.DataSource)
+	tenant := core.DefaultTenant
+	engine, _ := core.GetEngine(tenant.Driver, tenant.DataSource)
 
 	// 初始化 tenant cache
-	config.GetFromCache(tenant.TenantUid)
-	config.ReloadTenantConfig()
+	core.GetFromCache(tenant.TenantUid)
+	core.ReloadTenantConfig()
 
 	// 清理数据库
 	engine.DropTables(new(Student0), new(Student1))
@@ -262,14 +261,14 @@ func TestDM_Update(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := config.AcquireContext()
-			defer config.ReleaseContext(ctx)
+			ctx := core.AcquireContext()
+			defer core.ReleaseContext(ctx)
 			app := fiber.New()
 			fctx := app.AcquireCtx(&fasthttp.RequestCtx{})
 			defer app.ReleaseCtx(fctx)
 
 			// 设置 tenant 信息
-			fctx.Request().Header.Set(config.TenantHeader, tenant.TenantUid)
+			fctx.Request().Header.Set(core.TenantHeader, tenant.TenantUid)
 			err := ctx.FromFiber(fctx) // FromFiber 会自动设置 engine
 			if err != nil {
 				t.Fatalf("setup context failed: %v", err)
