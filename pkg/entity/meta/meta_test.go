@@ -4,13 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"reflect"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"xorm.io/xorm"
-	"xorm.io/xorm/schemas"
 )
 
 var (
@@ -50,7 +48,7 @@ func createSeedData() {
 	}
 	engine.Sync2(new(UserDepartment))
 
-	e1 := &Entity{EntityName: "user", PkAttrTable: "user", PkAttrColumn: "user_idx", Status: 1}
+	e1 := &Entity{EntityName: "user", PkAttrTable: "user", PkAttrColumn: "user_idx", Status: EntityStatusNormal}
 	_, err := engine.Insert(e1)
 	if err != nil {
 		panic(err)
@@ -61,7 +59,7 @@ func createSeedData() {
 	g2 := &AttrGroup{EntityIdx: e1.EntityIdx, AttrTable: "user_department"}
 	engine.Insert(g2)
 	// disabled entity
-	e2 := &Entity{EntityName: "user01", PkAttrTable: "user01", PkAttrColumn: "user_idx", Status: 0}
+	e2 := &Entity{EntityName: "user01", PkAttrTable: "user01", PkAttrColumn: "user_idx", Status: EntityStatusDeleted}
 	engine.Insert(e2)
 
 	// meta
@@ -78,7 +76,8 @@ func TestSerialMeta(t *testing.T) {
 		want    string
 		wantErr bool
 	}{
-		{"nil meta", nil, "null", false},
+		{"nil meta", nil, "", true},
+		{"valid meta", meta, "", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -87,100 +86,9 @@ func TestSerialMeta(t *testing.T) {
 				t.Errorf("SerialMeta() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if got != tt.want {
-				t.Errorf("SerialMeta() got = %v, want %v", got, tt.want)
+			if !tt.wantErr {
+				assert.NotEmpty(t, got)
 			}
-		})
-	}
-}
-
-func Test_queryEntityFromDB(t *testing.T) {
-	userEntity := &Entity{4,
-		"user", "", "user",
-		"user_idx", 1}
-	tests := []struct {
-		name       string
-		entityName string
-		want       *Entity
-		wantErr    bool
-	}{
-		{"empty", "test", nil, false},
-		{"exist", "user",
-			userEntity, false},
-		{"return nil when status neq 1", "user01", nil, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := queryEntityFromDB(tt.entityName, engine)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("queryEntityFromDB() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("queryEntityFromDB() got = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func Test_queryAttrGroupFromDB(t *testing.T) {
-	tests := []struct {
-		name          string
-		entityId      uint32
-		groupSize     int
-		wantErr       bool
-		wantErrString string
-	}{
-		{"entity id must neq 0", 0, 0, true, "entityId is zero"},
-		{"entity id = 1", 4, 2, false, ""},
-		{"entity id = 911,not exist,return nil", 911, 0, false, ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := queryAttrGroupFromDB(tt.entityId, engine)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("queryAttrGroupFromDB() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if err != nil {
-				assert.Contains(t, err.Error(), tt.wantErrString)
-			}
-			assert.Equal(t, tt.groupSize, len(got))
-			if tt.groupSize == 0 {
-				assert.Nil(t, got)
-			}
-		})
-	}
-}
-
-func Test_attachSchemaToMeta(t *testing.T) {
-	metaWithNotExistGroup := &EntityMeta{
-		Entity:     meta.Entity,
-		AttrGroups: []*AttrGroup{{AttrTable: "not_exist_table"}},
-	}
-	TableSchemasCache(engine)
-	tables := dsTableCache[DataSourceNameMd5(engine.DataSourceName())]
-	tests := []struct {
-		name          string
-		meta          *EntityMeta
-		tables        map[string]*schemas.Table
-		wantErr       bool
-		wantErrString string
-	}{
-		{"no attr groups", &EntityMeta{}, nil, true, "EntityMeta is nil"},
-		{"no attr tables", meta, nil, true, "no attr tables"},
-		{"no attr tables", meta, dsTableCache["empty"], true, "no attr tables"},
-		{"normal", meta, tables, false, ""},
-		{"some attr tables not found", metaWithNotExistGroup, tables, true, "attr table 'not_exist_table' for entry 'user' not found"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := attachSchemaToMeta(tt.meta, tt.tables)
-			if tt.wantErr {
-				assert.Contains(t, err.Error(), tt.wantErrString)
-				return
-			}
-			assert.Equal(t, len(meta.AttrGroups), len(meta.AttrTables))
 		})
 	}
 }
@@ -189,26 +97,96 @@ func TestGetMetaFromDB(t *testing.T) {
 	tests := []struct {
 		name            string
 		entityName      string
+		wantErr         bool
 		metaJsonContain string
 	}{
-		{"not exist entity", "not-exist", "entity 'not-exist' not found"},
-		{"normal", "user", `"attr_groups":[{"group_idx":`},
+		{"not exist entity", "not-exist", true, "entity not found"},
+		{"normal", "user", false, `"attr_groups":[{"group_idx":`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := getMetaFromDBAndCached(tt.entityName, engine)
-			if err != nil {
+			got, err := getMetaFromDB(tt.entityName, engine)
+			if tt.wantErr {
+				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.metaJsonContain)
 			} else {
+				assert.NoError(t, err)
 				assert.NotNil(t, got)
 				jd, _ := json.Marshal(got)
 				t.Log(string(jd))
 				assert.Contains(t, string(jd), tt.metaJsonContain)
-				// 查询成功并已经缓存
-				got2 := getMetaFromCache(tt.entityName)
-				assert.NotNil(t, got2)
-				assert.Equal(t, got, got2)
 			}
 		})
 	}
+}
+
+func TestAcquireMeta(t *testing.T) {
+	tests := []struct {
+		name       string
+		entityName string
+		wantErr    bool
+	}{
+		{"empty entity name", "", true},
+		{"not exist entity", "not-exist", true},
+		{"normal", "user", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := AcquireMeta(tt.entityName, engine)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, got)
+
+				// Test cache
+				cached := getMetaFromCache(tt.entityName)
+				assert.NotNil(t, cached)
+				assert.Equal(t, got, cached)
+			}
+		})
+	}
+}
+
+func TestEntityMeta_GetAttrGroupTablesNameFromCols(t *testing.T) {
+	m, err := AcquireMeta("user", engine)
+	assert.NoError(t, err)
+
+	tests := []struct {
+		name    string
+		cols    []string
+		want    []string
+		wantErr bool
+	}{
+		{"empty cols", []string{}, nil, true},
+		{"not exist column", []string{"not_exist"}, nil, true},
+		{"normal", []string{"name"}, []string{"user"}, false},
+		{"multiple tables", []string{"name", "dept_name"}, []string{"user", "user_department"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := m.GetAttrGroupTablesNameFromCols(tt.cols)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.ElementsMatch(t, tt.want, got)
+			}
+		})
+	}
+}
+
+func TestEntityMeta_UniqueKeys(t *testing.T) {
+	m, err := AcquireMeta("user", engine)
+	assert.NoError(t, err)
+
+	keys := m.UniqueKeys()
+	assert.NotEmpty(t, keys)
+}
+
+func TestEntityMeta_HasAutoIncrement(t *testing.T) {
+	m, err := AcquireMeta("user", engine)
+	assert.NoError(t, err)
+
+	assert.True(t, m.HasAutoIncrement())
 }

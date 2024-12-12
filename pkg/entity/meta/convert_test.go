@@ -16,11 +16,12 @@ func TestMeta_Marshal(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m, err := getMetaFromDBAndCached(tt.entityName, engine)
+			m, err := AcquireMeta(tt.entityName, engine)
 			if err != nil {
 				t.Error(err)
 			}
 			got, err := m.Marshal()
+			assert.NoError(t, err)
 			t.Logf("%v", string(got))
 			assert.Contains(t, string(got), tt.wantStr)
 		})

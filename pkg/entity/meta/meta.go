@@ -1,24 +1,51 @@
 package meta
 
 import (
-	"crypto/md5"
+	"crypto/sha256"
+	"errors"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/everpan/idig/pkg/core"
 	"github.com/goccy/go-json"
-	"sync"
+	lru "github.com/hashicorp/golang-lru"
 	"xorm.io/xorm"
 	"xorm.io/xorm/schemas"
 )
 
+// Entity status constants
+const (
+	EntityStatusNormal  = 1
+	EntityStatusDeleted = 2
+)
+
+// Cache configuration
+const (
+	DefaultCacheSize    = 1000 // 默认缓存大小
+	DefaultCacheTTL     = 1 * time.Hour
+	DefaultQueryTimeout = 30 * time.Second
+)
+
+// Common errors
+var (
+	ErrNilParameter   = errors.New("nil parameter provided")
+	ErrTableNotFound  = errors.New("table not found")
+	ErrEntityNotFound = errors.New("entity not found")
+	ErrInvalidStatus  = errors.New("invalid entity status")
+)
+
+// Entity represents the basic entity information
 type Entity struct {
 	EntityIdx    uint32 `json:"entity_idx" xorm:"pk autoincr"`
 	EntityName   string `json:"entity_name" xorm:"unique"`
 	Description  string `json:"desc" xorm:"desc_str"`
 	PkAttrTable  string `json:"pk_attr_table"`
 	PkAttrColumn string `json:"pk_attr_column"`
-	Status       int    `json:"status"` // 1-normal 2-del,name is updated to {name-del},because is unique
+	Status       int    `json:"status"` // EntityStatusNormal or EntityStatusDeleted
 }
 
+// AttrGroup represents a group of attributes for an entity
 type AttrGroup struct {
 	GroupIdx    uint32 `json:"group_idx" xorm:"pk autoincr"`
 	EntityIdx   uint32 `json:"entity_idx" xorm:"index"`
@@ -27,11 +54,49 @@ type AttrGroup struct {
 	Description string `json:"desc" xorm:"desc_str"`
 }
 
+// EntityMeta contains all metadata for an entity
 type EntityMeta struct {
 	Entity      *Entity                    `json:"entity"`
 	AttrGroups  []*AttrGroup               `json:"attr_groups"`
 	AttrTables  map[string]*schemas.Table  `json:"attr_tables"`
 	ColumnIndex map[string]*schemas.Column `json:"-"`
+	UpdatedAt   time.Time                  `json:"-"`
+}
+
+// MetaCache manages the caching of entity metadata
+type MetaCache struct {
+	sync.RWMutex
+	entityCache *lru.Cache
+	tableCache  *lru.Cache
+}
+
+var (
+	metaCache *MetaCache
+	once      sync.Once
+)
+
+// initCache initializes the cache with specified size
+func initCache(size int) error {
+	var err error
+	once.Do(func() {
+		entityCache, cacheErr := lru.New(size)
+		if cacheErr != nil {
+			err = fmt.Errorf("failed to create entity cache: %w", cacheErr)
+			return
+		}
+
+		tableCache, cacheErr := lru.New(size)
+		if cacheErr != nil {
+			err = fmt.Errorf("failed to create table cache: %w", cacheErr)
+			return
+		}
+
+		metaCache = &MetaCache{
+			entityCache: entityCache,
+			tableCache:  tableCache,
+		}
+	})
+	return err
 }
 
 func (e *Entity) TableName() string {
@@ -42,199 +107,204 @@ func (a *AttrGroup) TableName() string {
 	return "idig_entity_attr_group"
 }
 
+// InitEntityTable initializes the entity-related tables
 func InitEntityTable(engine *xorm.Engine) error {
-	err := engine.Sync2(new(Entity))
-	if err != nil {
-		return err
+	if err := initCache(DefaultCacheSize); err != nil {
+		return fmt.Errorf("failed to initialize cache: %w", err)
 	}
-	err = engine.Sync2(new(AttrGroup))
-	if err != nil {
-		return err
+
+	if err := engine.Sync2(new(Entity)); err != nil {
+		return fmt.Errorf("failed to sync entity table: %w", err)
 	}
-	_, _ = RegisterEntity(engine, "entity", "实体信息", (&Entity{}).TableName(), "entity_id")
-	_, _ = RegisterEntity(engine, "entity_attr_group", "实体属性组信息", (&AttrGroup{}).TableName(), "group_idx")
-	_, _ = RegisterEntity(engine, "tenant", "租户信息", (&core.Tenant{}).TableName(), "tenant_idx")
-	return err
+
+	if err := engine.Sync2(new(AttrGroup)); err != nil {
+		return fmt.Errorf("failed to sync attr group table: %w", err)
+	}
+
+	// Register basic entities
+	entities := []struct {
+		name, desc, table, pk string
+	}{
+		{"entity", "实体信息", (&Entity{}).TableName(), "entity_idx"},
+		{"entity_attr_group", "实体属性组信息", (&AttrGroup{}).TableName(), "group_idx"},
+		{"tenant", "租户信息", (&core.Tenant{}).TableName(), "tenant_idx"},
+	}
+
+	for _, e := range entities {
+		if _, err := RegisterEntity(engine, e.name, e.desc, e.table, e.pk); err != nil {
+			return fmt.Errorf("failed to register entity %s: %w", e.name, err)
+		}
+	}
+
+	return nil
 }
 
 func init() {
 	core.RegisterInitTableFunction(InitEntityTable)
 }
 
-var (
-	mux             sync.RWMutex
-	dsTableCache    = map[string]map[string]*schemas.Table{}
-	entityMetaCache = map[string]*EntityMeta{}
-)
+// DataSourceHash generates a secure hash for the data source name
+func DataSourceHash(s string) string {
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(s)))
+}
 
+// RegisterEntity registers a new entity in the system
 func RegisterEntity(engine *xorm.Engine, name, desc, pkAttrTable, pkAttrField string) (int64, error) {
+	if name == "" || pkAttrTable == "" || pkAttrField == "" {
+		return 0, ErrNilParameter
+	}
+
 	e := &Entity{
 		EntityName:   name,
 		Description:  desc,
 		PkAttrTable:  pkAttrTable,
 		PkAttrColumn: pkAttrField,
-		Status:       1,
+		Status:       EntityStatusNormal,
 	}
+
 	return engine.Insert(e)
 }
 
-func AddEntityAttrGroupByName(engine *xorm.Engine, entityName string, groupName string, attrTable string) (int64, error) {
-	em, err := getMetaFromDB(entityName, engine)
-	if err != nil {
-		return 0, err
-	}
-	return AddEntityAttrGroupById(engine, em.Entity.EntityIdx, groupName, attrTable)
-}
-
-func AddEntityAttrGroupById(engine *xorm.Engine, entityIdx uint32, groupName string, attrTable string) (int64, error) {
-	g := &AttrGroup{
-		EntityIdx:   entityIdx,
-		AttrTable:   attrTable,
-		GroupName:   groupName,
-		Description: attrTable,
-	}
-	return engine.Insert(g)
-}
-
-func SerialMeta(m *EntityMeta) (string, error) {
-	data, err := json.Marshal(m)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
-}
-func DataSourceNameMd5(s string) string {
-	return fmt.Sprintf("%x", md5.Sum([]byte(s)))
-}
-func TableSchemasCache(engine *xorm.Engine) error {
-	sc, err := engine.DBMetas()
-	if err != nil {
-		return err
-	}
-	mux.Lock()
-	defer mux.Unlock()
-	tableCache := make(map[string]*schemas.Table)
-	for _, s := range sc {
-		tableCache[s.Name] = s
-	}
-	key := DataSourceNameMd5(engine.DataSourceName())
-	dsTableCache[key] = tableCache
-	return nil
-}
-
+// AcquireMeta retrieves entity metadata with caching
 func AcquireMeta(entity string, engine *xorm.Engine) (*EntityMeta, error) {
-	m := getMetaFromCache(entity)
-	if m != nil {
-		return m, nil
+	if entity == "" {
+		return nil, ErrNilParameter
 	}
-	var err error
-	m, err = getMetaFromDBAndCached(entity, engine)
-	if err != nil {
-		return nil, err
+
+	// Try cache first
+	if meta := getMetaFromCache(entity); meta != nil {
+		if time.Since(meta.UpdatedAt) < DefaultCacheTTL {
+			return meta, nil
+		}
 	}
-	return m, err
+
+	// Get from DB and cache
+	return getMetaFromDBAndCache(entity, engine)
 }
 
 func getMetaFromCache(entityName string) *EntityMeta {
-	mux.RLocker()
-	defer mux.RLocker()
-	meta, ok := entityMetaCache[entityName]
-	if !ok {
-		return nil
+	metaCache.RLock()
+	defer metaCache.RUnlock()
+
+	if val, ok := metaCache.entityCache.Get(entityName); ok {
+		return val.(*EntityMeta)
 	}
-	return meta
+	return nil
 }
 
-func getMetaFromDBAndCached(entityName string, engine *xorm.Engine) (*EntityMeta, error) {
-	em, err := getMetaFromDB(entityName, engine)
+func getMetaFromDBAndCache(entityName string, engine *xorm.Engine) (*EntityMeta, error) {
+	meta, err := getMetaFromDB(entityName, engine)
 	if err != nil {
 		return nil, err
 	}
-	mux.Lock()
-	defer mux.Unlock()
-	entityMetaCache[entityName] = em
-	return em, nil
+
+	metaCache.Lock()
+	defer metaCache.Unlock()
+
+	meta.UpdatedAt = time.Now()
+	metaCache.entityCache.Add(entityName, meta)
+	return meta, nil
 }
 
+// getMetaFromDB retrieves entity metadata from the database
 func getMetaFromDB(entityName string, engine *xorm.Engine) (*EntityMeta, error) {
-	e, err := queryEntityFromDB(entityName, engine)
+	e := &Entity{
+		EntityName: entityName,
+		Status:     EntityStatusNormal,
+	}
+
+	exists, err := engine.Get(e)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get entity: %w", err)
 	}
-	if e == nil {
-		return nil, fmt.Errorf("entity '%s' not found", entityName)
+	if !exists {
+		return nil, ErrEntityNotFound
 	}
-	a, err := queryAttrGroupFromDB(e.EntityIdx, engine)
+
+	groups, err := queryAttrGroupFromDB(e.EntityIdx, engine)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to query attr groups: %w", err)
 	}
-	// 如果attrs中不包含主表，则添加一个虚拟的att节点
+
 	meta := &EntityMeta{
 		Entity:     e,
-		AttrGroups: a,
+		AttrGroups: groups,
+		AttrTables: make(map[string]*schemas.Table),
 	}
+
+	// Add primary table as virtual attr group
 	meta.AddAttrGroup(&AttrGroup{
 		GroupIdx:    0,
 		EntityIdx:   e.EntityIdx,
 		AttrTable:   e.PkAttrTable,
 		Description: "auto build virtual attr group",
 	})
-	key := DataSourceNameMd5(engine.DataSourceName())
-	tables, ok := dsTableCache[key]
-	if !ok {
-		_ = TableSchemasCache(engine)
-		tables = dsTableCache[key]
+
+	// Get table schemas
+	if err := attachSchemaToMeta(meta, engine); err != nil {
+		return nil, fmt.Errorf("failed to attach schema: %w", err)
 	}
-	err = attachSchemaToMeta(meta, tables)
-	if err != nil {
-		return nil, err
-	}
+
 	return meta, nil
 }
 
-func queryEntityFromDB(entityName string, engine *xorm.Engine) (*Entity, error) {
-	e := &Entity{
-		EntityName: entityName,
-		Status:     1,
+// queryAttrGroupFromDB retrieves attribute groups for an entity
+func queryAttrGroupFromDB(entityIdx uint32, engine *xorm.Engine) ([]*AttrGroup, error) {
+	var groups []*AttrGroup
+	err := engine.Where("entity_idx = ?", entityIdx).Find(&groups)
+	if err != nil {
+		return nil, err
 	}
-	ok, err := engine.Get(e)
-	if ok {
-		return e, nil
-	}
-	return nil, err
+	return groups, nil
 }
 
-func queryAttrGroupFromDB(entityId uint32, engine *xorm.Engine) ([]*AttrGroup, error) {
-	if entityId == 0 {
-		return nil, fmt.Errorf("entityId is zero")
-	}
-	g := &AttrGroup{EntityIdx: entityId}
-	var r []*AttrGroup
-	err := engine.Find(&r, g)
-	return r, err
-}
+// attachSchemaToMeta attaches table schemas to entity metadata
+func attachSchemaToMeta(m *EntityMeta, engine *xorm.Engine) error {
+	key := DataSourceHash(engine.DataSourceName())
 
-func attachSchemaToMeta(m *EntityMeta, tables map[string]*schemas.Table) error {
-	if m.Entity == nil {
-		return fmt.Errorf("EntityMeta is nil")
-	}
-	gs := m.AttrGroups
-	if gs == nil || len(gs) == 0 {
-		return fmt.Errorf("entity:'%s' has no attr groups", m.Entity.EntityName)
-	}
-	if tables == nil || len(tables) == 0 {
-		return fmt.Errorf("entity:'%s' has no attr tables", m.Entity.EntityName)
-	}
-	attrTable := make(map[string]*schemas.Table)
-	for _, g := range gs {
-		gt, ok := tables[g.AttrTable]
-		if !ok {
-			return fmt.Errorf("attr table '%s' for entry '%s' not found", g.AttrTable, m.Entity.EntityName)
+	metaCache.RLock()
+	tables, exists := metaCache.tableCache.Get(key)
+	metaCache.RUnlock()
+
+	if !exists {
+		if err := refreshTableCache(engine); err != nil {
+			return err
 		}
-		attrTable[g.AttrTable] = gt
+		metaCache.RLock()
+		tables, _ = metaCache.tableCache.Get(key)
+		metaCache.RUnlock()
 	}
-	m.AttrTables = attrTable
+
+	tableMap := tables.(map[string]*schemas.Table)
+	for _, g := range m.AttrGroups {
+		t, ok := tableMap[g.AttrTable]
+		if !ok {
+			return fmt.Errorf("%w: %s", ErrTableNotFound, g.AttrTable)
+		}
+		m.AttrTables[g.AttrTable] = t
+	}
+
 	m.buildColumnsIndex()
+	return nil
+}
+
+// refreshTableCache refreshes the table schema cache
+func refreshTableCache(engine *xorm.Engine) error {
+	sc, err := engine.DBMetas()
+	if err != nil {
+		return fmt.Errorf("failed to get DB metas: %w", err)
+	}
+
+	tableMap := make(map[string]*schemas.Table)
+	for _, s := range sc {
+		tableMap[s.Name] = s
+	}
+
+	metaCache.Lock()
+	defer metaCache.Unlock()
+
+	key := DataSourceHash(engine.DataSourceName())
+	metaCache.tableCache.Add(key, tableMap)
 	return nil
 }
 
@@ -279,8 +349,12 @@ func (m *EntityMeta) Verify() error {
 	return nil
 }
 
-// GetAttrGroupTablesNameFromCols 通过列找到列所存在的属性表; 不包含主表 PkAttrTable
+// GetAttrGroupTablesNameFromCols 通过列找到列所存在的属性表; 包含主表 PkAttrTable
 func (m *EntityMeta) GetAttrGroupTablesNameFromCols(cols []string) ([]string, error) {
+	if len(cols) == 0 {
+		return nil, ErrNilParameter
+	}
+
 	var tables []string
 	tableSet := make(map[string]struct{})
 	if len(cols) == 1 && cols[0] == "*" {
@@ -297,7 +371,10 @@ func (m *EntityMeta) GetAttrGroupTablesNameFromCols(cols []string) ([]string, er
 			tableSet[colInfo.TableName] = struct{}{}
 		}
 	}
-	delete(tableSet, m.Entity.PkAttrTable)
+
+	// Always include primary table
+	tableSet[m.Entity.PkAttrTable] = struct{}{}
+
 	for t := range tableSet {
 		tables = append(tables, t)
 	}
@@ -330,12 +407,32 @@ func (m *EntityMeta) HasAutoIncrement() bool {
 }
 
 func (m *EntityMeta) UniqueKeys() [][]string {
-	var uk [][]string
-	pt := m.AttrTables[m.Entity.PkAttrTable]
-	for _, idx := range pt.Indexes {
-		if idx.Type == schemas.UniqueType {
-			uk = append(uk, idx.Cols)
+	var keys [][]string
+
+	// Add primary key
+	pkTable := m.AttrTables[m.Entity.PkAttrTable]
+	if pkTable != nil && len(pkTable.PrimaryKeys) > 0 {
+		keys = append(keys, pkTable.PrimaryKeys)
+	}
+
+	// Add other unique keys
+	for _, table := range m.AttrTables {
+		for _, index := range table.Indexes {
+			if index.Type == schemas.UniqueType {
+				keys = append(keys, index.Cols)
+			}
 		}
 	}
-	return uk
+	return keys
+}
+
+func SerialMeta(m *EntityMeta) (string, error) {
+	if m == nil {
+		return "", ErrNilParameter
+	}
+	data, err := json.Marshal(m)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal meta: %w", err)
+	}
+	return string(data), nil
 }
