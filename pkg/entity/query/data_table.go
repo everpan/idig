@@ -374,8 +374,8 @@ func (dt *DataTable) addColumnToTable(col, tableName string, ret map[string][]st
 	}
 }
 
-// DivisionColumnsToTable 将列按表进行分组
-func (dt *DataTable) DivisionColumnsToTable(m *meta.EntityMeta, withPk bool) (map[string][]string, error) {
+// DivisionColumnsByTable 将列按表进行分组 table->cols
+func (dt *DataTable) DivisionColumnsByTable(m *meta.EntityMeta, withPk bool) (map[string][]string, error) {
 	if m == nil {
 		return nil, fmt.Errorf("EntityMeta is nil")
 	}

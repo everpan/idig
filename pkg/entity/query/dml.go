@@ -1,6 +1,7 @@
 package query
 
 import (
+	"github.com/everpan/idig/pkg/entity/meta"
 	"xorm.io/builder"
 )
 
@@ -26,10 +27,11 @@ import (
 	}]
 */
 type ColumnValue struct { // data manager
-	tableName string // entity name or table name
-	tenantId  any
-	wheres    []*Where
-	data      *DataTable
+	EntityName string // entity name or table name
+	TenantId   any
+	Meta       *meta.EntityMeta
+	wheres     []*Where
+	data       *DataTable
 }
 
 func (cv *ColumnValue) DataTable() *DataTable {
