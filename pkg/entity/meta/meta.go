@@ -149,8 +149,8 @@ func DataSourceHash(s string) string {
 }
 
 // RegisterEntity registers a new entity in the system
-func RegisterEntity(engine *xorm.Engine, name, desc, pkAttrTable, pkAttrField string) (int64, error) {
-	if name == "" || pkAttrTable == "" || pkAttrField == "" {
+func RegisterEntity(engine *xorm.Engine, name, desc, pkAttrTable, pkAttrColumn string) (int64, error) {
+	if name == "" || pkAttrTable == "" || pkAttrColumn == "" {
 		return 0, ErrNilParameter
 	}
 
@@ -158,7 +158,7 @@ func RegisterEntity(engine *xorm.Engine, name, desc, pkAttrTable, pkAttrField st
 		EntityName:   name,
 		Description:  desc,
 		PkAttrTable:  pkAttrTable,
-		PkAttrColumn: pkAttrField,
+		PkAttrColumn: pkAttrColumn,
 		Status:       EntityStatusNormal,
 	}
 
@@ -373,7 +373,7 @@ func (m *EntityMeta) GetAttrGroupTablesNameFromCols(cols []string) ([]string, er
 	}
 
 	// Always include primary table
-	tableSet[m.Entity.PkAttrTable] = struct{}{}
+	// tableSet[m.Entity.PkAttrTable] = struct{}{}
 
 	for t := range tableSet {
 		tables = append(tables, t)

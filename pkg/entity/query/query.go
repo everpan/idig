@@ -115,15 +115,26 @@ func (q *Query) buildSelectItems(bld *builder.Builder, m *meta.EntityMeta) (*bui
 	for _, item := range q.SelectItems {
 		cols = append(cols, item.Col)
 	}
+	e := m.Entity
+	bld.Select(cols...)
+	bld.From(e.PkAttrTable)
+
 	tables, err := m.GetAttrGroupTablesNameFromCols(cols)
 	if err != nil {
 		return nil, err
 	}
-	e := m.Entity
+	if len(tables) == 1 {
+		if e.PkAttrTable == tables[0] {
+			return bld, nil
+		}
+		return nil, fmt.Errorf("table %s not exist", e.PkAttrTable)
+	}
 	joinCond := fmt.Sprintf("%s.%s = %%s.%s", e.PkAttrTable, e.PkAttrColumn, e.PkAttrColumn)
-	bld.Select(cols...)
-	bld.From(e.PkAttrTable)
+
 	for _, t := range tables {
+		if t == e.PkAttrTable {
+			continue
+		}
 		bld.LeftJoin(t, fmt.Sprintf(joinCond, t))
 	}
 	return bld, nil
