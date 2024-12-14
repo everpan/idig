@@ -5,8 +5,6 @@ package handler
 import (
 	"fmt"
 	"github.com/everpan/idig/pkg/core"
-	"slices"
-
 	"github.com/everpan/idig/pkg/entity/meta"
 	"github.com/everpan/idig/pkg/entity/query"
 	"github.com/gofiber/fiber/v2"
@@ -48,26 +46,29 @@ func parseToColumnValue(ctx *core.Context) (*query.ColumnValue, error) {
 }
 
 // prepareEntityOperation 准备实体操作的通用逻辑
-func prepareEntityOperation(ctx *core.Context) (*query.ColumnValue, *xorm.Engine, error) {
+func prepareEntityOperation(ctx *core.Context) (*query.ColumnValue, error) {
 	cv, err := parseToColumnValue(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	engine := ctx.Engine()
 	cv.Meta, err = meta.AcquireMeta(cv.EntityName, engine)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return cv, engine, nil
+	return cv, nil
 }
 
 // handleTransaction 处理事务的通用逻辑
 func handleTransaction(engine *xorm.Engine, operation func(*xorm.Session) error) error {
 	sess := engine.NewSession()
-	defer sess.Close()
+	defer func(sess *xorm.Session) {
+		_ = sess.Close()
+	}(sess)
 
 	if err := operation(sess); err != nil {
 		_ = sess.Rollback()
+		logger.Info("Rollback failed", zap.Error(err))
 		return err
 	}
 
@@ -76,30 +77,32 @@ func handleTransaction(engine *xorm.Engine, operation func(*xorm.Session) error)
 
 // dmlUpdate 更新实体数据
 func dmlUpdate(ctx *core.Context) error {
-	cv, engine, err := prepareEntityOperation(ctx)
+	cv, err := prepareEntityOperation(ctx)
 	if err != nil {
 		return ctx.SendBadRequestError(err)
 	}
 	dt := cv.DataTable()
-	pkColumn := cv.Meta.PrimaryColumn()
-	pkId := dt.FetchColumnIndex(pkColumn)
-	if pkId < 0 {
-		return ctx.SendJSON(-2, "there is no pk in values, not implement", nil)
-	}
-	tabCols, err := dt.DivisionColumnsByTable(cv.Meta, true)
+	pkColumns := cv.Meta.PrimaryColumn()
+	pkId, err := dt.FetchColumnsIndex(pkColumns, nil)
 	if err != nil {
 		return ctx.SendBadRequestError(err)
 	}
-
-	return handleTransaction(engine, func(sess *xorm.Session) error {
-		return updateEntities(sess, tabCols, pkColumn, dt)
+	if len(pkId) == 0 {
+		return ctx.SendJSON(-2, "there is no pk in values, not implement", nil)
+	}
+	tabColsKV, err := dt.DivisionColumnsKeyVal(cv.Meta)
+	if err != nil {
+		return ctx.SendBadRequestError(err)
+	}
+	return handleTransaction(ctx.Engine(), func(sess *xorm.Session) error {
+		return updateEntities(sess, tabColsKV, dt)
 	})
 }
 
 // updateEntities 更新多个实体
-func updateEntities(sess *xorm.Session, tabCols map[string][]string, pkColumn string, dt *query.DataTable) error {
-	for t, cols := range tabCols {
-		if err := UpdateEntity(sess.Engine(), sess, t, cols, []string{pkColumn}, dt); err != nil {
+func updateEntities(sess *xorm.Session, tabColsKV map[string]*query.ColumnKeyVal, dt *query.DataTable) error {
+	for t, ckv := range tabColsKV {
+		if err := UpdateEntity(sess.Engine(), sess, t, ckv, dt); err != nil {
 			return fmt.Errorf("update entity error: %w", err)
 		}
 	}
@@ -108,72 +111,129 @@ func updateEntities(sess *xorm.Session, tabCols map[string][]string, pkColumn st
 
 // dmlInsert 插入实体数据
 func dmlInsert(ctx *core.Context) error {
-	cv, engine, err := prepareEntityOperation(ctx)
+	cv, err := prepareEntityOperation(ctx)
 	if err != nil {
 		return ctx.SendJSON(-1, "parse column values error", err.Error())
 	}
 	dt := cv.DataTable()
-	pkColumn := cv.Meta.PrimaryColumn()
-	pkId := dt.FetchColumnIndex(pkColumn)
-	hasAutoIncrement := cv.Meta.HasAutoIncrement()
-
-	if !hasAutoIncrement && pkId < 0 {
-		return ctx.SendBadRequestError(fmt.Errorf("primary key required"))
-	}
-
-	pkId = dt.AddColumn(pkColumn)
-	tableCols, err := dt.DivisionColumnsByTable(cv.Meta, true)
+	tableColsKV, err := dt.DivisionColumnsKeyVal(cv.Meta)
 	if err != nil {
 		return ctx.SendJSON(-1, "can't division entity to attrs groups", err.Error())
 	}
 
 	pkTable := cv.Meta.PrimaryTable()
-	pkCols, ok := tableCols[pkTable]
+	pkColsKV, ok := tableColsKV[pkTable]
 	if !ok {
 		return ctx.SendJSON(-1, "no values for primary table", nil)
 	}
-
-	if hasAutoIncrement {
-		pkCols = slices.Clone(pkCols)
-		pkCols = slices.DeleteFunc(pkCols, func(s string) bool {
-			return s == pkColumn
-		})
+	pkValueIsNull, pkIdx, err := dt.FirstRowColumnsIsNull(pkColsKV.KCols)
+	if err != nil {
+		return ctx.SendJSON(-1, "there is no values for primary table", err.Error())
+	}
+	hasAutoIncrement := cv.Meta.HasAutoIncrement()
+	if !hasAutoIncrement && pkValueIsNull {
+		// 非自增，pk不能为空
+		return ctx.SendJSON(-1, "there is no primary key values for none auto increment table", nil)
 	}
 
-	return handleTransaction(engine, func(sess *xorm.Session) error {
-		insertCount, err := insertEntities(sess, pkTable, pkCols, dt, hasAutoIncrement, pkId)
-		if err != nil {
-			return err
+	return handleTransaction(ctx.Engine(), func(sess *xorm.Session) error {
+		if err1 := insertEntity(sess, pkTable, pkColsKV, dt, hasAutoIncrement); err1 != nil {
+			return ctx.SendJSON(-1, "insert entity primary table error", err1.Error())
 		}
-		return ctx.SendSuccess(fmt.Sprintf("insert %d rows", insertCount))
+		delete(tableColsKV, pkTable)
+		for t, ckv := range tableColsKV {
+			if err2 := insertEntity(sess, t, ckv, dt, false); err2 != nil {
+				return ctx.SendJSON(-1, "insert entity attr table error", err2.Error())
+			}
+		}
+		// insert all success,ret pk,uk values
+		ret, _ := dt.FetchRowsData(pkIdx)
+		rdt := &query.JDataTable{
+			Cols: pkColsKV.KCols,
+			Data: ret,
+		}
+		return ctx.SendJSON(0, "insert ok", rdt)
 	})
 }
 
-// insertEntities 插入多个实体
-func insertEntities(sess *xorm.Session, table string, cols []string, dt *query.DataTable, updateAutoInc bool, pkId int) (int, error) {
-	count, err := InsertEntity(sess.Engine(), sess, table, cols, dt, updateAutoInc, pkId)
-	if err != nil {
-		return 0, fmt.Errorf("insert data error: %w", err)
+// insertEntities 插入实体
+func insertEntity(sess *xorm.Session, table string, ckv *query.ColumnKeyVal,
+	dt *query.DataTable, hasAutoIncrement bool) error {
+	var (
+		valIdx []int
+		err    error
+		cols   []string
+		pkPos  = 0
+	)
+
+	if hasAutoIncrement {
+		// insert without pk and get insert_id
+		pkIdx, _ := dt.FetchColumnsIndex(ckv.KCols, nil)
+		pkPos = pkIdx[0]
+		valIdx, err = dt.FetchColumnsIndex(ckv.VCols, nil)
+		cols = ckv.VCols
+	} else { // insert with pk value
+		valIdx, err = dt.FetchColumnsIndex(ckv.KCols, ckv.VCols)
+		cols = ckv.KCols
+		for _, c := range ckv.VCols {
+			cols = append(cols, c)
+		}
+		pkPos = valIdx[0]
 	}
-	return count, nil
+
+	vals, err := dt.FetchRowData(0, valIdx, nil)
+	if err != nil {
+		return err
+	}
+	bld := query.BuildInsertSQL(sess.Engine().DriverName(), table, cols, vals)
+	sqlStr, _, err := bld.ToSQL()
+	if err != nil {
+		return err
+	}
+	logger.Info("insert entity", zap.Bool("hasAutoIncrement", hasAutoIncrement),
+		zap.Any("kCols", ckv.KCols), zap.Any("vCols", ckv.VCols),
+		zap.String("sql", sqlStr), zap.Int("vals size", len(dt.Values())))
+	for rowId := range dt.Values() {
+		if args, err2 := dt.FetchRowDataWithSQL(rowId, valIdx, nil, sqlStr); err2 != nil {
+			return err2
+		} else {
+			insertRet, err3 := sess.Exec(args...)
+			logger.Info("exec insert ret", zap.Any("rowId", rowId), zap.Any("args", args),
+				zap.Error(err3), zap.Any("ret", insertRet))
+			if err3 != nil {
+				return err3
+			}
+			if hasAutoIncrement { // 执行插入操作并处理自增主键
+				lastId, _ := insertRet.LastInsertId()
+				logger.Info("insert auto increment", zap.Int("pk pos", pkPos), zap.Any("lastId", lastId))
+				dt.UpdateData(rowId, pkPos, lastId)
+			}
+		}
+	}
+	return nil
 }
 
 // UpdateEntity 更新实体数据
-func UpdateEntity(engine *xorm.Engine, sess *xorm.Session, table string, cols []string, keyCols []string, dt *query.DataTable) error {
+func UpdateEntity(engine *xorm.Engine, sess *xorm.Session, table string, ckv *query.ColumnKeyVal, dt *query.DataTable) error {
 	bld := builder.Dialect(engine.DriverName())
 	bld.From(table)
 
-	pkCond, _, err := buildPrimaryKeyCondition(dt, keyCols)
+	pkCond, _, err := buildPrimaryKeyCondition(dt, ckv.KCols)
 	if err != nil {
 		return err
 	}
 
-	valIdx, vals, err := fetchValues(dt, cols)
+	_, vals, err := fetchFirstRowValues(dt, ckv.VCols)
 	if err != nil {
 		return err
 	}
+	allIdx, err := dt.FetchColumnsIndex(ckv.KCols, ckv.VCols)
+	if err != nil {
+		return err
+	}
+	// pkIdx, pks, err := fetchFirstRowValues(dt, vCols)
 
-	valCond := buildValueConditions(cols, vals)
+	valCond := buildValueConditions(ckv.VCols, vals)
 	bld.Update(valCond...)
 	bld.Where(pkCond)
 
@@ -181,8 +241,9 @@ func UpdateEntity(engine *xorm.Engine, sess *xorm.Session, table string, cols []
 	if err != nil {
 		return err
 	}
-
-	return executeUpdate(sess, dt, sql, valIdx)
+	logger.Info("update entity", zap.String("entity", table),
+		zap.String("sql", sql), zap.Any("kCols", ckv.KCols), zap.Any("vCols", ckv.VCols))
+	return executeUpdate(sess, dt, sql, allIdx)
 }
 
 // buildPrimaryKeyCondition 构建主键条件
@@ -200,14 +261,14 @@ func buildPrimaryKeyCondition(dt *query.DataTable, keyCols []string) (builder.Co
 	return pkCond, pkVals, nil
 }
 
-// fetchValues 获取要更新的值
-func fetchValues(dt *query.DataTable, cols []string) ([]int, []any, error) {
-	valIdx, err := dt.FetchColumnsIndex(cols)
+// fetchFirstRowValues 获取要更新的值
+func fetchFirstRowValues(dt *query.DataTable, cols []string) ([]int, []any, error) {
+	valIdx, err := dt.FetchColumnsIndex(cols, nil)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	vals, err := dt.FetchRowData(0, valIdx)
+	vals, err := dt.FetchRowData(0, valIdx, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -227,69 +288,11 @@ func buildValueConditions(cols []string, vals []any) []builder.Cond {
 // executeUpdate 执行更新操作
 func executeUpdate(sess *xorm.Session, dt *query.DataTable, sql string, valIdx []int) error {
 	for i := range dt.Values() {
-		args, _ := dt.FetchRowDataWithSQL(i, valIdx, sql)
+		args, _ := dt.FetchRowDataWithSQL(i, valIdx, nil, sql)
 		_, err := sess.Exec(args...)
 		if err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-// InsertEntity 插入实体
-func InsertEntity(engine *xorm.Engine, sess *xorm.Session, table string, cols []string,
-	dt *query.DataTable, updateAutoInc bool, pkId int) (int, error) {
-	if len(cols) == 0 {
-		return 0, fmt.Errorf("table '%v' cols is empty", table)
-	}
-
-	// 对插入列进行排序以保持一致性
-	pkColsIndex, err := dt.SortColumnsAndFetchIndices(cols)
-	if err != nil {
-		return 0, err
-	}
-
-	// 获取第一行数据
-	rd, err := dt.FetchRowData(0, pkColsIndex)
-	if err != nil {
-		return 0, err
-	}
-
-	// 构建 SQL 插入语句
-	bld := query.BuildInsertSQL(engine.DriverName(), table, cols, rd)
-	sqlStr, _, err := bld.ToSQL()
-	if err != nil {
-		return 0, err
-	}
-
-	logger.Info("InsertEntity", zap.String("sql", sqlStr), zap.Int("row count", len(dt.Values())))
-
-	return executeInsert(sess, dt, sqlStr, pkColsIndex, updateAutoInc, pkId)
-}
-
-// executeInsert 执行插入操作并处理自增主键
-func executeInsert(sess *xorm.Session, dt *query.DataTable, sqlStr string, pkColsIndex []int, updateAutoInc bool, pkId int) (int, error) {
-	insertCount := 0
-	for rowId := range dt.Values() {
-		args, err := dt.FetchRowDataWithSQL(rowId, pkColsIndex, sqlStr)
-		if err != nil {
-			return 0, err
-		}
-
-		ret, err1 := sess.Exec(args...)
-		if err1 != nil {
-			return 0, err1
-		}
-
-		if updateAutoInc {
-			// 更新自增主键
-			lastId, err2 := ret.LastInsertId()
-			if err2 != nil {
-				return 0, err2
-			}
-			dt.UpdateData(rowId, pkId, lastId)
-		}
-		insertCount++
-	}
-	return insertCount, nil
 }

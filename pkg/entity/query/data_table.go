@@ -29,12 +29,17 @@ type JDataTable struct {
 	Data [][]any  `json:"vals"`
 }
 
+type ColumnKeyVal struct {
+	KCols []string `json:"cols"` // 主键列
+	VCols []string `json:"cols"` // 数值列
+}
+
 // From 从DataTable转换为JDataTable
 func (jd *JDataTable) From(dt *DataTable) {
 	jd.Cols, jd.Data = dt.cols, dt.data
 }
 
-// FromArrayMap 从map数组转换为JDataTable
+// FromArrayMap 从map数组转换为JDataTable； xorm 查询结果转换为data table形式
 func (jd *JDataTable) FromArrayMap(am []map[string]any) {
 	if len(am) < 1 {
 		return
@@ -254,30 +259,50 @@ func (dt *DataTable) ValidIndex(index []int) error {
 }
 
 // FetchRowData 通过索引获取指定行数据
-func (dt *DataTable) FetchRowData(row int, index []int) ([]any, error) {
+func (dt *DataTable) FetchRowData(row int, index1, index2 []int) ([]any, error) {
 	if err := dt.CheckRowId(row); err != nil {
 		return nil, err
 	}
-	if err := dt.ValidIndex(index); err != nil {
+	if err := dt.ValidIndex(index1); err != nil {
 		return nil, err
 	}
 
-	result := make([]any, len(index))
+	result := make([]any, len(index1)+len(index2))
 	data := dt.data[row]
-	for i, j := range index {
+	for i, j := range index1 {
 		result[i] = data[j]
+	}
+	idxLen1 := len(index1)
+	for i, j := range index2 {
+		result[i+idxLen1] = data[j]
+	}
+	return result, nil
+}
+
+func (dt *DataTable) FetchRowsData(index []int) ([][]any, error) {
+	if err := dt.ValidIndex(index); err != nil {
+		return nil, err
+	}
+	result := make([][]any, len(dt.Values()))
+	for row, values := range dt.Values() {
+		rd := make([]any, len(index))
+		for i, j := range index {
+			rd[i] = values[j]
+			fmt.Printf("i %v,j %v,v %v\n", i, j, values[j])
+		}
+		result[row] = rd
 	}
 	return result, nil
 }
 
 // FetchRowDataWithSQL 获取行数据，并在头部放入sqlStr
-func (dt *DataTable) FetchRowDataWithSQL(row int, index []int, sqlStr string) ([]any, error) {
-	data, err := dt.FetchRowData(row, index)
+func (dt *DataTable) FetchRowDataWithSQL(row int, index1, index2 []int, sqlStr string) ([]any, error) {
+	data, err := dt.FetchRowData(row, index1, index2)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make([]any, len(index)+1)
+	result := make([]any, len(index1)+len(index2)+1)
 	result[0] = sqlStr
 	copy(result[1:], data)
 	return result, nil
@@ -292,8 +317,8 @@ func (dt *DataTable) FetchColumnIndex(col string) int {
 }
 
 // FetchColumnsIndex 获取指定列的索引列表
-func (dt *DataTable) FetchColumnsIndex(cols []string) ([]int, error) {
-	if len(cols) == 0 {
+func (dt *DataTable) FetchColumnsIndex(cols1, cols2 []string) ([]int, error) {
+	if len(cols1) == 0 {
 		return nil, fmt.Errorf("columns list is empty")
 	}
 
@@ -302,8 +327,15 @@ func (dt *DataTable) FetchColumnsIndex(cols []string) ([]int, error) {
 		index[col] = i
 	}
 
-	result := make([]int, 0, len(cols))
-	for _, col := range cols {
+	result := make([]int, 0, len(cols1)+len(cols2))
+	for _, col := range cols1 {
+		if i, ok := index[col]; !ok {
+			return nil, fmt.Errorf("column %s not found", col)
+		} else {
+			result = append(result, i)
+		}
+	}
+	for _, col := range cols2 {
 		if i, ok := index[col]; !ok {
 			return nil, fmt.Errorf("column %s not found", col)
 		} else {
@@ -316,11 +348,11 @@ func (dt *DataTable) FetchColumnsIndex(cols []string) ([]int, error) {
 // FetchRowDataByColumns 通过列名获取指定行数据
 // 注意：多次获取时，建议使用 FetchRowData 以获得更好的性能
 func (dt *DataTable) FetchRowDataByColumns(row int, cols []string) ([]any, error) {
-	index, err := dt.FetchColumnsIndex(cols)
+	index, err := dt.FetchColumnsIndex(cols, nil)
 	if err != nil {
 		return nil, err
 	}
-	return dt.FetchRowData(row, index)
+	return dt.FetchRowData(row, index, nil)
 }
 
 // SortColumnsAndFetchIndices 列排序，且获取索引
@@ -329,7 +361,7 @@ func (dt *DataTable) SortColumnsAndFetchIndices(cols []string) ([]int, error) {
 		return nil, fmt.Errorf("columns list is empty")
 	}
 	slices.Sort(cols)
-	return dt.FetchColumnsIndex(cols)
+	return dt.FetchColumnsIndex(cols, nil)
 }
 
 // CheckRowId 检查行ID是否有效
@@ -366,7 +398,7 @@ func (dt *DataTable) UpdateData(rowId, colId int, d any) error {
 }
 
 // addColumnToTable 将列添加到指定表
-func (dt *DataTable) addColumnToTable(col, tableName string, ret map[string][]string) {
+func (dt *DataTable) addColumnToTable_(col, tableName string, ret map[string][]string) {
 	if cols, exists := ret[tableName]; exists {
 		ret[tableName] = append(cols, col)
 	} else {
@@ -374,36 +406,51 @@ func (dt *DataTable) addColumnToTable(col, tableName string, ret map[string][]st
 	}
 }
 
-// DivisionColumnsByTable 将列按表进行分组 table->cols
-func (dt *DataTable) DivisionColumnsByTable(m *meta.EntityMeta, withPk bool) (map[string][]string, error) {
+// DivisionColumnsKeyVal 将现有的数据列 按表进行分割，并且每个表中都需要包含主键
+func (dt *DataTable) DivisionColumnsKeyVal(m meta.IEntityMeta) (map[string]*ColumnKeyVal, error) {
 	if m == nil {
 		return nil, fmt.Errorf("EntityMeta is nil")
 	}
-
-	ret := make(map[string][]string)
-	pk := m.PrimaryColumn()
-
-	// 处理所有列
+	ret := make(map[string]*ColumnKeyVal)
+	pkCols := m.PrimaryColumn()
+	// 为了处理简单，先将pk列添加到数据中
+	dt.AddColumns(pkCols)
 	for _, col := range dt.cols {
-		if !withPk && pk == col {
-			continue
-		}
-		if m1, ok := m.ColumnIndex[col]; ok {
-			dt.addColumnToTable(col, m1.TableName, ret)
-		} else {
+		table := m.FetchTableNameByColumn(col)
+		if table == "" {
 			return nil, fmt.Errorf("column '%s' not found", col)
 		}
-	}
-
-	// 处理主键
-	if withPk {
-		primaryTable := m.PrimaryTable()
-		for t := range ret {
-			if t != primaryTable {
-				dt.addColumnToTable(pk, t, ret)
+		ckv, ok1 := ret[table]
+		if !ok1 {
+			ckv = &ColumnKeyVal{
+				KCols: pkCols,
 			}
+			ret[table] = ckv
+		}
+		if slices.Index(ckv.KCols, col) > -1 {
+			// pk can not put into VCols todo improve
+			continue
+		}
+		ckv.VCols = append(ckv.VCols, col)
+	}
+	return ret, nil
+}
+
+func (dt *DataTable) FirstRowColumnsIsNull(cols []string) (bool, []int, error) {
+	colIdx, err := dt.FetchColumnsIndex(cols, nil)
+	if err != nil {
+		return false, nil, err
+	}
+	vals, err := dt.FetchRowData(0, colIdx, nil)
+	if err != nil {
+		return false, nil, err
+	}
+	isNull := true
+	for _, v := range vals {
+		if v != nil {
+			isNull = false
+			break
 		}
 	}
-
-	return ret, nil
+	return isNull, colIdx, nil
 }

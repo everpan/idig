@@ -40,9 +40,9 @@ type Entity struct {
 	EntityIdx    uint32 `json:"entity_idx" xorm:"pk autoincr"`
 	EntityName   string `json:"entity_name" xorm:"unique"`
 	Description  string `json:"desc" xorm:"desc_str"`
-	PkAttrTable  string `json:"pk_attr_table"`
-	PkAttrColumn string `json:"pk_attr_column"`
-	Status       int    `json:"status"` // EntityStatusNormal or EntityStatusDeleted
+	PkAttrTable  string `json:"pk_attr_table" xorm:"not null"`
+	PkAttrColumn string `json:"pk_attr_column" xorm:"not null"`
+	Status       int    `json:"status" xorm:"default 1"` // EntityStatusNormal or EntityStatusDeleted
 }
 
 // AttrGroup represents a group of attributes for an entity
@@ -63,15 +63,20 @@ type EntityMeta struct {
 	UpdatedAt   time.Time                  `json:"-"`
 }
 
-// MetaCache manages the caching of entity metadata
-type MetaCache struct {
+type IEntityMeta interface {
+	FetchTableNameByColumn(col string) string
+	PrimaryColumn() []string
+}
+
+// MCache manages the caching of entity metadata
+type MCache struct {
 	sync.RWMutex
 	entityCache *lru.Cache
 	tableCache  *lru.Cache
 }
 
 var (
-	metaCache *MetaCache
+	metaCache *MCache
 	once      sync.Once
 )
 
@@ -91,7 +96,7 @@ func initCache(size int) error {
 			return
 		}
 
-		metaCache = &MetaCache{
+		metaCache = &MCache{
 			entityCache: entityCache,
 			tableCache:  tableCache,
 		}
@@ -356,6 +361,7 @@ func (m *EntityMeta) GetAttrGroupTablesNameFromCols(cols []string) ([]string, er
 	}
 
 	var tables []string
+	var void = struct{}{}
 	tableSet := make(map[string]struct{})
 	if len(cols) == 1 && cols[0] == "*" {
 		for _, at := range m.AttrTables {
@@ -368,7 +374,7 @@ func (m *EntityMeta) GetAttrGroupTablesNameFromCols(cols []string) ([]string, er
 			if !ok {
 				return nil, fmt.Errorf("column '%s' not exist", col)
 			}
-			tableSet[colInfo.TableName] = struct{}{}
+			tableSet[colInfo.TableName] = void
 		}
 	}
 
@@ -394,8 +400,11 @@ func (m *EntityMeta) PrimaryTable() string {
 	return m.Entity.PkAttrTable
 }
 
-func (m *EntityMeta) PrimaryColumn() string {
-	return m.Entity.PkAttrColumn
+func (m *EntityMeta) PrimaryColumn() []string {
+	if len(m.Entity.PkAttrColumn) > 0 {
+		return []string{m.Entity.PkAttrColumn}
+	}
+	return m.AttrTables[m.PrimaryTable()].PrimaryKeys
 }
 
 func (m *EntityMeta) IsPrimaryTable(table string) bool {
@@ -435,4 +444,11 @@ func SerialMeta(m *EntityMeta) (string, error) {
 		return "", fmt.Errorf("failed to marshal meta: %w", err)
 	}
 	return string(data), nil
+}
+
+func (m *EntityMeta) FetchTableNameByColumn(col string) string {
+	if c, ok := m.ColumnIndex[col]; ok {
+		return c.TableName
+	}
+	return ""
 }

@@ -2,8 +2,10 @@ server:
   host-port: :9099
 tenant:
   default:
-    data-source: "devuser:devuser.COM2019@tcp(devmysql01.wiz.top:6033)/wiz_hr2_old"
+    #    data-source: "devuser:devuser.COM2019@tcp(devmysql01.wiz.top:6033)/wiz_hr2_old"
+    #    driver: mysql
+    #        data-source: "/tmp/idig_test.db"
+    #        driver: sqlite3
+    data-source: "root@tcp(localhost:3306)/wiz_hr2"
     driver: mysql
-  #        data-source: "/tmp/idig_test.db"
-  #        driver: sqlite3
   http-header-key: X-Tenant-UID
