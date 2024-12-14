@@ -4,6 +4,7 @@ package handler
 
 import (
 	"fmt"
+
 	"github.com/everpan/idig/pkg/core"
 	"github.com/everpan/idig/pkg/entity/meta"
 	"github.com/everpan/idig/pkg/entity/query"
@@ -113,46 +114,50 @@ func updateEntities(sess *xorm.Session, tabColsKV map[string]*query.ColumnKeyVal
 func dmlInsert(ctx *core.Context) error {
 	cv, err := prepareEntityOperation(ctx)
 	if err != nil {
-		return ctx.SendJSON(-1, "parse column values error", err.Error())
+		return ctx.SendJSON(-1, fmt.Sprintf("Error parsing column values: %v", err), nil)
 	}
+
 	dt := cv.DataTable()
 	tableColsKV, err := dt.DivisionColumnsKeyVal(cv.Meta)
 	if err != nil {
-		return ctx.SendJSON(-1, "can't division entity to attrs groups", err.Error())
+		return ctx.SendJSON(-1, fmt.Sprintf("Cannot divide entity into attribute groups: %v", err), nil)
 	}
 
 	pkTable := cv.Meta.PrimaryTable()
 	pkColsKV, ok := tableColsKV[pkTable]
 	if !ok {
-		return ctx.SendJSON(-1, "no values for primary table", nil)
+		return ctx.SendJSON(-1, "No values provided for the primary table", nil)
 	}
+
 	pkValueIsNull, pkIdx, err := dt.FirstRowColumnsIsNull(pkColsKV.KCols)
 	if err != nil {
-		return ctx.SendJSON(-1, "there is no values for primary table", err.Error())
+		return ctx.SendJSON(-1, fmt.Sprintf("No values for the primary table: %v", err), nil)
 	}
+
 	hasAutoIncrement := cv.Meta.HasAutoIncrement()
 	if !hasAutoIncrement && pkValueIsNull {
-		// 非自增，pk不能为空
-		return ctx.SendJSON(-1, "there is no primary key values for none auto increment table", nil)
+		return ctx.SendJSON(-1, "Primary key cannot be null for non-auto increment table", nil)
 	}
 
 	return handleTransaction(ctx.Engine(), func(sess *xorm.Session) error {
-		if err1 := insertEntity(sess, pkTable, pkColsKV, dt, hasAutoIncrement); err1 != nil {
-			return ctx.SendJSON(-1, "insert entity primary table error", err1.Error())
+		if err := insertEntity(sess, pkTable, pkColsKV, dt, hasAutoIncrement); err != nil {
+			return ctx.SendJSON(-1, fmt.Sprintf("Error inserting entity into the primary table: %v", err), nil)
 		}
+
 		delete(tableColsKV, pkTable)
 		for t, ckv := range tableColsKV {
-			if err2 := insertEntity(sess, t, ckv, dt, false); err2 != nil {
-				return ctx.SendJSON(-1, "insert entity attr table error", err2.Error())
+			if err := insertEntity(sess, t, ckv, dt, false); err != nil {
+				return ctx.SendJSON(-1, fmt.Sprintf("Error inserting entity into attribute table: %v", err), nil)
 			}
 		}
-		// insert all success,ret pk,uk values
+
+		// Insertion successful, return primary key and unique key values
 		ret, _ := dt.FetchRows(pkIdx)
 		rdt := &query.JDataTable{
 			Cols: pkColsKV.KCols,
 			Data: ret,
 		}
-		return ctx.SendJSON(0, "insert ok", rdt)
+		return ctx.SendJSON(0, "Insert successful", rdt)
 	})
 }
 
