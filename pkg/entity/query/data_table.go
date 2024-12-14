@@ -324,19 +324,20 @@ func (dt *DataTable) FetchColumnsIndex(cols1, cols2 []string) ([]int, error) {
 		index[col] = i
 	}
 
-	result := make([]int, 0, len(cols1)+len(cols2))
-	for _, col := range cols1 {
-		if i, ok := index[col]; !ok {
+	result := make([]int, len(cols1)+len(cols2))
+	for i, col := range cols1 {
+		if j, ok := index[col]; !ok {
 			return nil, fmt.Errorf("column %s not found", col)
 		} else {
-			result = append(result, i)
+			result[i] = j
 		}
 	}
-	for _, col := range cols2 {
-		if i, ok := index[col]; !ok {
+	off := len(cols1)
+	for i, col := range cols2 {
+		if j, ok := index[col]; !ok {
 			return nil, fmt.Errorf("column %s not found", col)
 		} else {
-			result = append(result, i)
+			result[i+off] = j
 		}
 	}
 	return result, nil
