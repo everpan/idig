@@ -29,7 +29,6 @@ func Test_parseValues(t *testing.T) {
 	}{
 		{"array vals 1", `{"cols":["a","b"],"vals":[["a1",2323]]}`, func(cv *ColumnValue, err error) {
 			assert.Nil(t, err)
-			cv.tableName = "test"
 			dt := cv.DataTable()
 			assert.Equal(t, 2, len(dt.Columns()))
 			assert.Equal(t, 1, len(dt.Values()))
@@ -43,7 +42,6 @@ func Test_parseValues(t *testing.T) {
 		}},
 		{"array vals 2", `{"cols":["pk","a","b"],"vals":[[3,"a1",2]]}`, func(cv *ColumnValue, err error) {
 			assert.Nil(t, err)
-			cv.tableName = "test"
 			dt := cv.DataTable()
 			assert.Equal(t, 3, len(dt.Columns()))
 			assert.Equal(t, 1, len(dt.Values()))
@@ -122,12 +120,12 @@ func TestFetchRowData(t *testing.T) {
 	dt.AddRow([]any{"value1"})
 
 	// 测试有效索引
-	data, err := dt.FetchRowData(0, []int{0})
+	data, err := dt.FetchRow(0, []int{0}, nil)
 	assert.Nil(t, err)
 	assert.Equal(t, "value1", data[0])
 
 	// 测试无效索引
-	_, err = dt.FetchRowData(1, []int{0})
+	_, err = dt.FetchRow(1, []int{0}, nil)
 	assert.NotNil(t, err)
 }
 
@@ -167,6 +165,7 @@ func TestParseKeyVals(t *testing.T) {
 
 	assert.Nil(t, dt.ParseKeyVals(raw))
 	assert.Equal(t, 2, len(dt.Values()))
+	assert.Equal(t, 1, dt.Values()[0][1])
 }
 
 /*

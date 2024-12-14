@@ -147,7 +147,7 @@ func dmlInsert(ctx *core.Context) error {
 			}
 		}
 		// insert all success,ret pk,uk values
-		ret, _ := dt.FetchRowsData(pkIdx)
+		ret, _ := dt.FetchRows(pkIdx)
 		rdt := &query.JDataTable{
 			Cols: pkColsKV.KCols,
 			Data: ret,
@@ -181,7 +181,7 @@ func insertEntity(sess *xorm.Session, table string, ckv *query.ColumnKeyVal,
 		pkPos = valIdx[0]
 	}
 
-	vals, err := dt.FetchRowData(0, valIdx, nil)
+	vals, err := dt.FetchRow(0, valIdx, nil)
 	if err != nil {
 		return err
 	}
@@ -268,7 +268,7 @@ func fetchFirstRowValues(dt *query.DataTable, cols []string) ([]int, []any, erro
 		return nil, nil, err
 	}
 
-	vals, err := dt.FetchRowData(0, valIdx, nil)
+	vals, err := dt.FetchRow(0, valIdx, nil)
 	if err != nil {
 		return nil, nil, err
 	}

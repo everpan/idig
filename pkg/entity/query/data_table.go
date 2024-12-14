@@ -258,8 +258,8 @@ func (dt *DataTable) ValidIndex(index []int) error {
 	return nil
 }
 
-// FetchRowData 通过索引获取指定行数据
-func (dt *DataTable) FetchRowData(row int, index1, index2 []int) ([]any, error) {
+// FetchRow 通过索引获取指定行数据
+func (dt *DataTable) FetchRow(row int, index1, index2 []int) ([]any, error) {
 	if err := dt.CheckRowId(row); err != nil {
 		return nil, err
 	}
@@ -279,7 +279,7 @@ func (dt *DataTable) FetchRowData(row int, index1, index2 []int) ([]any, error) 
 	return result, nil
 }
 
-func (dt *DataTable) FetchRowsData(index []int) ([][]any, error) {
+func (dt *DataTable) FetchRows(index []int) ([][]any, error) {
 	if err := dt.ValidIndex(index); err != nil {
 		return nil, err
 	}
@@ -297,7 +297,7 @@ func (dt *DataTable) FetchRowsData(index []int) ([][]any, error) {
 
 // FetchRowDataWithSQL 获取行数据，并在头部放入sqlStr
 func (dt *DataTable) FetchRowDataWithSQL(row int, index1, index2 []int, sqlStr string) ([]any, error) {
-	data, err := dt.FetchRowData(row, index1, index2)
+	data, err := dt.FetchRow(row, index1, index2)
 	if err != nil {
 		return nil, err
 	}
@@ -310,9 +310,6 @@ func (dt *DataTable) FetchRowDataWithSQL(row int, index1, index2 []int, sqlStr s
 
 // FetchColumnIndex 获取指定列的索引
 func (dt *DataTable) FetchColumnIndex(col string) int {
-	if col == "" {
-		return -1
-	}
 	return slices.Index(dt.cols, col)
 }
 
@@ -346,13 +343,13 @@ func (dt *DataTable) FetchColumnsIndex(cols1, cols2 []string) ([]int, error) {
 }
 
 // FetchRowDataByColumns 通过列名获取指定行数据
-// 注意：多次获取时，建议使用 FetchRowData 以获得更好的性能
+// 注意：多次获取时，建议使用 FetchRow 以获得更好的性能
 func (dt *DataTable) FetchRowDataByColumns(row int, cols []string) ([]any, error) {
 	index, err := dt.FetchColumnsIndex(cols, nil)
 	if err != nil {
 		return nil, err
 	}
-	return dt.FetchRowData(row, index, nil)
+	return dt.FetchRow(row, index, nil)
 }
 
 // SortColumnsAndFetchIndices 列排序，且获取索引
@@ -441,7 +438,7 @@ func (dt *DataTable) FirstRowColumnsIsNull(cols []string) (bool, []int, error) {
 	if err != nil {
 		return false, nil, err
 	}
-	vals, err := dt.FetchRowData(0, colIdx, nil)
+	vals, err := dt.FetchRow(0, colIdx, nil)
 	if err != nil {
 		return false, nil, err
 	}
