@@ -30,8 +30,22 @@ type JDataTable struct {
 }
 
 type ColumnKeyVal struct {
-	KCols []string `json:"cols"` // 主键列
-	VCols []string `json:"cols"` // 数值列
+	KCols []string `json:"key_cols"`    // 主键列
+	VCols []string `json:"val_cols"`    // 数值列
+	UCols []string `json:"unique_cols"` //当前data - table中包含的unique key
+	ACols []string `json:"all_cols"`    // all cols
+}
+
+func (cvk *ColumnKeyVal) MergeSortAllColumns() {
+	// 包含所有列，包括主列; xorm builder 插入过程中会对列排序，这里也进行排序
+	cvk.ACols = make([]string, len(cvk.VCols), len(cvk.KCols)+len(cvk.VCols))
+	copy(cvk.ACols, cvk.VCols)
+	for _, c := range cvk.KCols {
+		cvk.ACols = append(cvk.ACols, c)
+	}
+	slices.Sort(cvk.KCols)
+	slices.Sort(cvk.VCols)
+	slices.Sort(cvk.ACols)
 }
 
 // From 从DataTable转换为JDataTable
@@ -188,7 +202,7 @@ func parseSingleValue(colList []string, mv map[string]any) ([]any, error) {
 	return ret, nil
 }
 
-// AddColumn 添加列
+// AddColumn 添加列 返回列所在索引
 func (dt *DataTable) AddColumn(col string) int {
 	if col == "" {
 		return -1
@@ -288,7 +302,6 @@ func (dt *DataTable) FetchRows(index []int) ([][]any, error) {
 		rd := make([]any, len(index))
 		for i, j := range index {
 			rd[i] = values[j]
-			fmt.Printf("i %v,j %v,v %v\n", i, j, values[j])
 		}
 		result[row] = rd
 	}
@@ -430,6 +443,9 @@ func (dt *DataTable) DivisionColumnsKeyVal(m meta.IEntityMeta) (map[string]*Colu
 			continue
 		}
 		ckv.VCols = append(ckv.VCols, col)
+	}
+	for _, cvk := range ret {
+		cvk.MergeSortAllColumns()
 	}
 	return ret, nil
 }

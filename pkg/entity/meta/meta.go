@@ -66,6 +66,7 @@ type EntityMeta struct {
 type IEntityMeta interface {
 	FetchTableNameByColumn(col string) string
 	PrimaryColumn() []string
+	UniqueColumns(table string) [][]string
 }
 
 // MCache manages the caching of entity metadata
@@ -407,32 +408,29 @@ func (m *EntityMeta) PrimaryColumn() []string {
 	return m.AttrTables[m.PrimaryTable()].PrimaryKeys
 }
 
+func (m *EntityMeta) UniqueColumns(table string) [][]string {
+	t, ok := m.AttrTables[table]
+	if !ok {
+		return nil
+	}
+	uks := make([][]string, 0)
+	for _, idx := range t.Indexes {
+		if idx.Type == schemas.UniqueType {
+			uks = append(uks, idx.Cols)
+		}
+	}
+	if len(uks) == 0 {
+		return nil
+	}
+	return uks
+}
+
 func (m *EntityMeta) IsPrimaryTable(table string) bool {
 	return m.PrimaryTable() == table
 }
 
 func (m *EntityMeta) HasAutoIncrement() bool {
 	return m.AttrTables[m.Entity.PkAttrTable].AutoIncrement != ""
-}
-
-func (m *EntityMeta) UniqueKeys() [][]string {
-	var keys [][]string
-
-	// Add primary key
-	pkTable := m.AttrTables[m.Entity.PkAttrTable]
-	if pkTable != nil && len(pkTable.PrimaryKeys) > 0 {
-		keys = append(keys, pkTable.PrimaryKeys)
-	}
-
-	// Add other unique keys
-	for _, table := range m.AttrTables {
-		for _, index := range table.Indexes {
-			if index.Type == schemas.UniqueType {
-				keys = append(keys, index.Cols)
-			}
-		}
-	}
-	return keys
 }
 
 func SerialMeta(m *EntityMeta) (string, error) {
@@ -451,4 +449,21 @@ func (m *EntityMeta) FetchTableNameByColumn(col string) string {
 		return c.TableName
 	}
 	return ""
+}
+
+func (m *EntityMeta) FilterOutPrimaryTableUniqueCols(cols []string) []string {
+	allUniqueCols := map[string]struct{}{}
+	void := struct{}{}
+	for _, uniqueCol := range m.UniqueColumns(m.PrimaryTable()) {
+		for _, col := range uniqueCol {
+			allUniqueCols[col] = void
+		}
+	}
+	var uks []string
+	for _, col := range cols {
+		if _, ok := allUniqueCols[col]; ok {
+			uks = append(uks, col)
+		}
+	}
+	return uks
 }

@@ -4,7 +4,6 @@ package handler
 
 import (
 	"fmt"
-
 	"github.com/everpan/idig/pkg/core"
 	"github.com/everpan/idig/pkg/entity/meta"
 	"github.com/everpan/idig/pkg/entity/query"
@@ -67,12 +66,15 @@ func handleTransaction(engine *xorm.Engine, operation func(*xorm.Session) error)
 		_ = sess.Close()
 	}(sess)
 
+	if err := sess.Begin(); err != nil {
+		logger.Error("failed to begin transaction", zap.Error(err))
+		// return err
+	}
 	if err := operation(sess); err != nil {
 		_ = sess.Rollback()
 		logger.Info("Rollback failed", zap.Error(err))
 		return err
 	}
-
 	return sess.Commit()
 }
 
@@ -129,7 +131,7 @@ func dmlInsert(ctx *core.Context) error {
 		return ctx.SendJSON(-1, "No values provided for the primary table", nil)
 	}
 
-	pkValueIsNull, pkIdx, err := dt.FirstRowColumnsIsNull(pkColsKV.KCols)
+	pkValueIsNull, _, err := dt.FirstRowColumnsIsNull(pkColsKV.KCols)
 	if err != nil {
 		return ctx.SendJSON(-1, fmt.Sprintf("No values for the primary table: %v", err), nil)
 	}
@@ -139,26 +141,35 @@ func dmlInsert(ctx *core.Context) error {
 		return ctx.SendJSON(-1, "Primary key cannot be null for non-auto increment table", nil)
 	}
 
-	return handleTransaction(ctx.Engine(), func(sess *xorm.Session) error {
+	if err = handleTransaction(ctx.Engine(), func(sess *xorm.Session) error {
 		if err := insertEntity(sess, pkTable, pkColsKV, dt, hasAutoIncrement); err != nil {
-			return ctx.SendJSON(-1, fmt.Sprintf("Error inserting entity into the primary table: %v", err), nil)
+			return fmt.Errorf("error inserting entity into the primary table: %w", err)
 		}
 
 		delete(tableColsKV, pkTable)
 		for t, ckv := range tableColsKV {
 			if err := insertEntity(sess, t, ckv, dt, false); err != nil {
-				return ctx.SendJSON(-1, fmt.Sprintf("Error inserting entity into attribute table: %v", err), nil)
+				return fmt.Errorf("error inserting entity into attribute table: %w", err)
 			}
 		}
-
+		rowCnt := len(dt.Values())
+		msg := fmt.Sprintf("insert %d row(s) for entity %s", rowCnt, cv.EntityName)
 		// Insertion successful, return primary key and unique key values
-		ret, _ := dt.FetchRows(pkIdx)
-		rdt := &query.JDataTable{
-			Cols: pkColsKV.KCols,
-			Data: ret,
+		var rdt any
+		if hasAutoIncrement {
+			ukCols := cv.Meta.FilterOutPrimaryTableUniqueCols(pkColsKV.VCols)
+			ukIdx, _ := dt.FetchColumnsIndex(ukCols, nil)
+			ret, _ := dt.FetchRows(ukIdx)
+			rdt = &query.JDataTable{
+				Cols: pkColsKV.KCols,
+				Data: ret,
+			}
 		}
-		return ctx.SendJSON(0, "Insert successful", rdt)
-	})
+		return ctx.SendJSON(0, msg, rdt)
+	}); err != nil {
+		return ctx.SendJSON(-1, fmt.Sprintf("inserting entity error: %v", err), nil)
+	}
+	return nil
 }
 
 // insertEntities 插入实体
@@ -170,27 +181,21 @@ func insertEntity(sess *xorm.Session, table string, ckv *query.ColumnKeyVal,
 		cols   []string
 		pkPos  = 0
 	)
-
 	if hasAutoIncrement {
-		// insert without pk and get insert_id
-		pkIdx, _ := dt.FetchColumnsIndex(ckv.KCols, nil)
-		pkPos = pkIdx[0]
-		valIdx, err = dt.FetchColumnsIndex(ckv.VCols, nil)
 		cols = ckv.VCols
+		pkPos = dt.FetchColumnIndex(ckv.KCols[0])
 	} else { // insert with pk value
-		valIdx, err = dt.FetchColumnsIndex(ckv.KCols, ckv.VCols)
-		cols = ckv.KCols
-		for _, c := range ckv.VCols {
-			cols = append(cols, c)
-		}
-		pkPos = valIdx[0]
+		cols = ckv.ACols
 	}
+	valIdx, err = dt.FetchColumnsIndex(cols, nil)
 
 	vals, err := dt.FetchRow(0, valIdx, nil)
 	if err != nil {
 		return err
 	}
 	bld := query.BuildInsertSQL(sess.Engine().DriverName(), table, cols, vals)
+	// builder sorted cols
+
 	sqlStr, _, err := bld.ToSQL()
 	if err != nil {
 		return err
@@ -203,15 +208,12 @@ func insertEntity(sess *xorm.Session, table string, ckv *query.ColumnKeyVal,
 			return err2
 		} else {
 			insertRet, err3 := sess.Exec(args...)
-			logger.Info("exec insert ret", zap.Any("rowId", rowId), zap.Any("args", args),
-				zap.Error(err3), zap.Any("ret", insertRet))
 			if err3 != nil {
 				return err3
 			}
 			if hasAutoIncrement { // 执行插入操作并处理自增主键
 				lastId, _ := insertRet.LastInsertId()
-				logger.Info("insert auto increment", zap.Int("pk pos", pkPos), zap.Any("lastId", lastId))
-				dt.UpdateData(rowId, pkPos, lastId)
+				_ = dt.UpdateData(rowId, pkPos, lastId)
 			}
 		}
 	}
