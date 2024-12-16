@@ -97,15 +97,18 @@ func dmlUpdate(ctx *core.Context) error {
 	if err != nil {
 		return ctx.SendBadRequestError(err)
 	}
-	return handleTransaction(ctx.Engine(), func(sess *xorm.Session) error {
+	if err = handleTransaction(ctx.Engine(), func(sess *xorm.Session) error {
 		return updateEntities(sess, tabColsKV, dt)
-	})
+	}); err != nil {
+		return ctx.SendBadRequestError(err)
+	}
+	return ctx.SendJSON(0, "update finished", nil)
 }
 
 // updateEntities 更新多个实体
 func updateEntities(sess *xorm.Session, tabColsKV map[string]*query.ColumnKeyVal, dt *query.DataTable) error {
 	for t, ckv := range tabColsKV {
-		if err := UpdateEntity(sess.Engine(), sess, t, ckv, dt); err != nil {
+		if err := UpdateEntity(sess, t, ckv, dt); err != nil {
 			return fmt.Errorf("update entity error: %w", err)
 		}
 	}
@@ -221,8 +224,11 @@ func insertEntity(sess *xorm.Session, table string, ckv *query.ColumnKeyVal,
 }
 
 // UpdateEntity 更新实体数据
-func UpdateEntity(engine *xorm.Engine, sess *xorm.Session, table string, ckv *query.ColumnKeyVal, dt *query.DataTable) error {
-	bld := builder.Dialect(engine.DriverName())
+func UpdateEntity(sess *xorm.Session, table string, ckv *query.ColumnKeyVal, dt *query.DataTable) error {
+	if ckv.KCols == nil || len(ckv.KCols) == 0 {
+		return fmt.Errorf("no primary column values provided")
+	}
+	bld := builder.Dialect(sess.Engine().DriverName())
 	bld.From(table)
 
 	pkCond, _, err := buildPrimaryKeyCondition(dt, ckv.KCols)
@@ -234,7 +240,7 @@ func UpdateEntity(engine *xorm.Engine, sess *xorm.Session, table string, ckv *qu
 	if err != nil {
 		return err
 	}
-	allIdx, err := dt.FetchColumnsIndex(ckv.KCols, ckv.VCols)
+	allIdx, err := dt.FetchColumnsIndex(ckv.VCols, ckv.KCols)
 	if err != nil {
 		return err
 	}
