@@ -44,6 +44,11 @@ func (cv *ColumnValue) DataTable() *DataTable {
 func (cv *ColumnValue) ParseValues(data []byte) error {
 	cv.data = NewDataTable()
 	err := cv.data.ParseValues(data)
+	if err != nil {
+		return err
+	}
+	// 记录插入删除结果 --result缩写
+	cv.data.resultIdx = cv.data.AddColumn("#result")
 	return err
 }
 

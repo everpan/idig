@@ -7,12 +7,15 @@ import (
 )
 
 type Attr struct {
-	Name      string `json:"name"`
-	Type      string `json:"type"`
-	Comment   string `json:"comment"`
-	Length1   int64  `json:"length1,omitempty"`
-	Length2   int64  `json:"length2,omitempty"`
-	AttrTable string `json:"attr_table"` // table name
+	Name        string         `json:"name"`
+	Type        string         `json:"type"`
+	Length1     int64          `json:"length1,omitempty"`
+	Length2     int64          `json:"length2,omitempty"`
+	AttrTable   string         `json:"attr_table"` // table name
+	Nullable    bool           `json:"nullable,omitempty"`
+	Default     string         `json:"default,omitempty"`
+	EnumOptions map[string]int `json:"enum_options,omitempty"`
+	Comment     string         `json:"comment,omitempty"`
 }
 
 type JMeta struct {
@@ -31,10 +34,25 @@ func (jm *JMeta) ToJson() []byte {
 func (attr *Attr) FromColumn(attrTable string, col *schemas.Column) {
 	attr.Name = col.Name
 	attr.Type = strings.ToLower(col.SQLType.Name)
-	attr.Comment = strings.TrimSpace(col.Comment)
 	attr.Length1 = col.SQLType.DefaultLength
 	attr.Length2 = col.SQLType.DefaultLength2
 	attr.AttrTable = attrTable
+	attr.Nullable = col.Nullable
+	attr.Default = col.Default
+	attr.EnumOptions = col.EnumOptions
+	attr.Comment = strings.TrimSpace(col.Comment)
+}
+
+func (attr *Attr) ToColumn() *schemas.Column {
+	st := schemas.SQLType{
+		Name:           strings.ToUpper(attr.Type),
+		DefaultLength:  attr.Length1,
+		DefaultLength2: attr.Length2,
+	}
+	col := schemas.NewColumn(attr.Name, attr.Name, st, attr.Length1, attr.Length2, attr.Nullable)
+	col.Comment = attr.Comment
+	col.EnumOptions = attr.EnumOptions
+	return col
 }
 
 func (m *EntityMeta) ToJMeta() *JMeta {

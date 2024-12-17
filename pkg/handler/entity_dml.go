@@ -60,8 +60,8 @@ func prepareEntityOperation(ctx *core.Context) (*query.ColumnValue, error) {
 }
 
 // handleTransaction 处理事务的通用逻辑
-func handleTransaction(engine *xorm.Engine, operation func(*xorm.Session) error) error {
-	sess := engine.NewSession()
+func handleTransaction(ctx *core.Context, operation func(*xorm.Session) error) error {
+	sess := ctx.Engine().NewSession()
 	defer func(sess *xorm.Session) {
 		_ = sess.Close()
 	}(sess)
@@ -97,7 +97,7 @@ func dmlUpdate(ctx *core.Context) error {
 	if err != nil {
 		return ctx.SendBadRequestError(err)
 	}
-	if err = handleTransaction(ctx.Engine(), func(sess *xorm.Session) error {
+	if err = handleTransaction(ctx, func(sess *xorm.Session) error {
 		return updateEntities(sess, tabColsKV, dt)
 	}); err != nil {
 		return ctx.SendBadRequestError(err)
@@ -144,15 +144,16 @@ func dmlInsert(ctx *core.Context) error {
 		return ctx.SendJSON(-1, "Primary key cannot be null for non-auto increment table", nil)
 	}
 
-	if err = handleTransaction(ctx.Engine(), func(sess *xorm.Session) error {
-		if err := insertEntity(sess, pkTable, pkColsKV, dt, hasAutoIncrement); err != nil {
-			return fmt.Errorf("error inserting entity into the primary table: %w", err)
+	if err = handleTransaction(ctx, func(sess *xorm.Session) error {
+		// 插入主表，便于产生 auto increment key
+		if err1 := insertEntity(sess, pkTable, pkColsKV, dt, hasAutoIncrement); err1 != nil {
+			return fmt.Errorf("error inserting entity into the primary table: %w", err1)
 		}
 
 		delete(tableColsKV, pkTable)
 		for t, ckv := range tableColsKV {
-			if err := insertEntity(sess, t, ckv, dt, false); err != nil {
-				return fmt.Errorf("error inserting entity into attribute table: %w", err)
+			if err1 := insertEntity(sess, t, ckv, dt, false); err1 != nil {
+				return fmt.Errorf("error inserting entity into attribute table: %w", err1)
 			}
 		}
 		rowCnt := len(dt.Values())
@@ -217,6 +218,10 @@ func insertEntity(sess *xorm.Session, table string, ckv *query.ColumnKeyVal,
 			if hasAutoIncrement { // 执行插入操作并处理自增主键
 				lastId, _ := insertRet.LastInsertId()
 				_ = dt.UpdateData(rowId, pkPos, lastId)
+				_ = dt.UpdateResult(rowId, lastId)
+			} else {
+				af, _ := insertRet.RowsAffected()
+				_ = dt.UpdateAffectedResult(rowId, af)
 			}
 		}
 	}
@@ -302,10 +307,12 @@ func buildValueConditions(cols []string, vals []any) []builder.Cond {
 func executeUpdate(sess *xorm.Session, dt *query.DataTable, sql string, valIdx []int) error {
 	for i := range dt.Values() {
 		args, _ := dt.FetchRowDataWithSQL(i, valIdx, nil, sql)
-		_, err := sess.Exec(args...)
+		result, err := sess.Exec(args...)
 		if err != nil {
 			return err
 		}
+		af, _ := result.RowsAffected()
+		_ = dt.UpdateAffectedResult(i, af) // 累计变更影响记录数
 	}
 	return nil
 }

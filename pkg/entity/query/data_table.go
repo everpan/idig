@@ -19,8 +19,9 @@ const (
 // cols: 列名列表
 // data: 行数据，每行包含与cols对应的值
 type DataTable struct {
-	cols []string // 列名列表
-	data [][]any  // 行数据
+	cols      []string // 列名列表
+	data      [][]any  // 行数据
+	resultIdx int
 }
 
 // JDataTable JSON序列化结构
@@ -405,6 +406,35 @@ func (dt *DataTable) UpdateData(rowId, colId int, d any) error {
 		return err
 	}
 	dt.data[rowId][colId] = d
+	return nil
+}
+
+// UpdateResult 更新指定位置的数据
+func (dt *DataTable) UpdateResult(rowId int, r any) error {
+	dt.data[rowId][dt.resultIdx] = r
+	return nil
+}
+
+// UpdateAllWithResult 更新所有列结果值为同一个值，用于批量失败
+func (dt *DataTable) UpdateAllWithResult(r any) error {
+	for _, row := range dt.data {
+		row[dt.resultIdx] = r
+	}
+	return nil
+}
+
+func (dt *DataTable) UpdateAffectedResult(rowId int, affected int64) error {
+	row := dt.data[rowId]
+	oldVal := row[dt.resultIdx]
+	if oldVal == nil {
+		row[dt.resultIdx] = affected
+	} else {
+		if _, ok := oldVal.(int64); ok {
+			row[dt.resultIdx] = oldVal.(int64) + affected
+		} else {
+			row[dt.resultIdx] = affected
+		}
+	}
 	return nil
 }
 

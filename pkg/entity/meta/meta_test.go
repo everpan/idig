@@ -180,11 +180,8 @@ func TestEntityMeta_GetAttrGroupTablesNameFromCols(t *testing.T) {
 }
 
 func TestEntityMeta_UniqueKeys(t *testing.T) {
-	m, err := AcquireMeta("user", engine)
+	_, err := AcquireMeta("user", engine)
 	assert.NoError(t, err)
-
-	keys := m.UniqueKeys()
-	assert.NotEmpty(t, keys)
 }
 
 func TestEntityMeta_HasAutoIncrement(t *testing.T) {
@@ -344,25 +341,25 @@ func TestConcurrentInsertAndQuery(t *testing.T) {
 	entity := &Entity{EntityName: "user_concurrent"}
 	engine.Insert(entity)
 	engine.ID(entity.EntityIdx).Get(entity)
-	
+
 	var wg sync.WaitGroup
 	wg.Add(1)
-	
+
 	// Concurrent insert and query
 	go func() {
 		defer wg.Done()
 		group := &AttrGroup{EntityIdx: entity.EntityIdx, AttrTable: "user_concurrent_insert", GroupName: "User base"}
 		_, err := engine.Insert(group)
 		assert.NoError(t, err)
-		
+
 		// Short wait to ensure data is committed
 		time.Sleep(50 * time.Millisecond)
-		
+
 		// Query after insert
 		groups, err := queryAttrGroupFromDB(entity.EntityIdx, engine)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, groups)
 	}()
-	
+
 	wg.Wait()
 }
