@@ -55,7 +55,7 @@ func (e *Event) Validate() error {
 // Publisher defines the interface for publishing events
 type Publisher interface {
 	// Publish publishes an event to the specified topic
-	Publish(ctx context.Context, topic string, event Event) error
+	Publish(ctx context.Context, topic string, event *Event) error
 	// Close closes the publisher
 	Close() error
 }

@@ -15,7 +15,7 @@ import (
 type RocketMQEventBus struct {
 	producer rocketmq.Producer
 	consumer rocketmq.PushConsumer
-	handlers map[string][]func(event.Event) error
+	handlers map[string][]func(*event.Event) error
 	mu       sync.RWMutex
 	group    string
 }
@@ -52,12 +52,12 @@ func NewRocketMQEventBus(config RocketMQConfig) (*RocketMQEventBus, error) {
 	return &RocketMQEventBus{
 		producer: p,
 		consumer: c,
-		handlers: make(map[string][]func(event.Event) error),
+		handlers: make(map[string][]func(*event.Event) error),
 		group:    config.Group,
 	}, nil
 }
 
-func (r *RocketMQEventBus) Publish(ctx context.Context, topic string, evt event.Event) error {
+func (r *RocketMQEventBus) Publish(ctx context.Context, topic string, evt *event.Event) error {
 	data, err := json.Marshal(evt)
 	if err != nil {
 		return err
@@ -72,10 +72,10 @@ func (r *RocketMQEventBus) Publish(ctx context.Context, topic string, evt event.
 	return err
 }
 
-func (r *RocketMQEventBus) Subscribe(ctx context.Context, topic string, handler func(event.Event) error) error {
+func (r *RocketMQEventBus) Subscribe(ctx context.Context, topic string, handler func(*event.Event) error) error {
 	r.mu.Lock()
 	if r.handlers[topic] == nil {
-		r.handlers[topic] = make([]func(event.Event) error, 0)
+		r.handlers[topic] = make([]func(*event.Event) error, 0)
 	}
 	r.handlers[topic] = append(r.handlers[topic], handler)
 	r.mu.Unlock()
@@ -100,7 +100,7 @@ func (r *RocketMQEventBus) Subscribe(ctx context.Context, topic string, handler 
 				maxRetries := 3
 				retryCount := 0
 				for {
-					if err := h(evt); err != nil {
+					if err := h(&evt); err != nil {
 						if err == event.ErrRetry {
 							if retryCount < maxRetries {
 								retryCount++

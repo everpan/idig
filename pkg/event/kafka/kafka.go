@@ -13,7 +13,7 @@ import (
 type KafkaEventBus struct {
 	producer sarama.SyncProducer
 	consumer sarama.Consumer
-	handlers map[string][]func(event.Event) error
+	handlers map[string][]func(*event.Event) error
 	mu       sync.RWMutex
 }
 
@@ -37,11 +37,11 @@ func NewKafkaEventBus(brokers []string) (*KafkaEventBus, error) {
 	return &KafkaEventBus{
 		producer: producer,
 		consumer: consumer,
-		handlers: make(map[string][]func(event.Event) error),
+		handlers: make(map[string][]func(*event.Event) error),
 	}, nil
 }
 
-func (k *KafkaEventBus) Publish(ctx context.Context, topic string, evt event.Event) error {
+func (k *KafkaEventBus) Publish(ctx context.Context, topic string, evt *event.Event) error {
 	if err := evt.Validate(); err != nil {
 		return fmt.Errorf("invalid event: %w", err)
 	}
@@ -63,10 +63,10 @@ func (k *KafkaEventBus) Publish(ctx context.Context, topic string, evt event.Eve
 	return nil
 }
 
-func (k *KafkaEventBus) Subscribe(ctx context.Context, topic string, handler func(event.Event) error) error {
+func (k *KafkaEventBus) Subscribe(ctx context.Context, topic string, handler func(*event.Event) error) error {
 	k.mu.Lock()
 	if k.handlers[topic] == nil {
-		k.handlers[topic] = make([]func(event.Event) error, 0)
+		k.handlers[topic] = make([]func(*event.Event) error, 0)
 	}
 	k.handlers[topic] = append(k.handlers[topic], handler)
 	k.mu.Unlock()
@@ -101,7 +101,7 @@ func (k *KafkaEventBus) Subscribe(ctx context.Context, topic string, handler fun
 					maxRetries := 3
 					retryCount := 0
 					for {
-						if err := h(evt); err != nil {
+						if err := h(&evt); err != nil {
 							if err == event.ErrRetry {
 								if retryCount < maxRetries {
 									retryCount++

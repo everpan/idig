@@ -149,3 +149,81 @@ func TestEventValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestEventEdgeCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		event   Event
+		wantErr bool
+	}{
+		{
+			name: "special characters in Type and Source",
+			event: Event{
+				ID:        2,
+				Type:      "test!@#$%^&*()_+",
+				Source:    "source<>?",
+				Data:      map[string]interface{}{"key": "value"},
+				Timestamp: time.Now(),
+			},
+			wantErr: false,
+		},
+		{
+			name: "large data payload",
+			event: Event{
+				ID:        3,
+				Type:      "test.large",
+				Source:    "large.source",
+				Data:      map[string]interface{}{},
+				Timestamp: time.Now(),
+			},
+			wantErr: false,
+		},
+		{
+			name: "special characters in Type and Source",
+			event: Event{
+				ID:        2,
+				Type:      "test!@#$%^&*()_+",
+				Source:    "source<>?",
+				Data:      map[string]interface{}{"key": "value"},
+				Timestamp: time.Now(),
+			},
+			wantErr: false,
+		},
+		{
+			name: "large data payload",
+			event: Event{
+				ID:        3,
+				Type:      "test.large",
+				Source:    "large.source",
+				Data:      map[string]interface{}{},
+				Timestamp: time.Now(),
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := json.Marshal(tt.event)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("json.Marshal() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			var decoded Event
+			err = json.Unmarshal(data, &decoded)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("json.Unmarshal() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if decoded.ID != tt.event.ID {
+				t.Errorf("Event ID mismatch: got %v, want %v", decoded.ID, tt.event.ID)
+			}
+			if decoded.Type != tt.event.Type {
+				t.Errorf("Event Type mismatch: got %v, want %v", decoded.Type, tt.event.Type)
+			}
+			if decoded.Source != tt.event.Source {
+				t.Errorf("Event Source mismatch: got %v, want %v", decoded.Source, tt.event.Source)
+			}
+		})
+	}
+}
