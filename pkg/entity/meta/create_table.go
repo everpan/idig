@@ -2,6 +2,7 @@ package meta
 
 import (
 	"context"
+	"fmt"
 	"xorm.io/xorm"
 	"xorm.io/xorm/schemas"
 )
@@ -48,7 +49,7 @@ func (t *Table) CreateSchemaTable() *schemas.Table {
 func GenerateTableSQL(eg *xorm.Engine, table *schemas.Table) (string, error) {
 	sql, b, err := eg.Dialect().CreateTableSQL(context.Background(), eg.DB(), table, "")
 	if !b || err != nil {
-		return "", err
+		return "", fmt.Errorf("create table sql not success or err %w", err)
 	}
 	return sql, nil
 }
