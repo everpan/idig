@@ -20,7 +20,8 @@ func InitAllTables(engine *xorm.Engine) error {
 	for _, initTableFunction := range initTableFunctions {
 		err := initTableFunction(engine)
 		if err != nil {
-			return err
+			// 这里的部分错误不影响业务，例如一些表字段的插入
+			logger.Error("init table failed", zap.Error(err))
 		}
 	}
 	return nil

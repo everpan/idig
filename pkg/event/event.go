@@ -4,7 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/everpan/idig/pkg/config"
+	"github.com/everpan/idig/pkg/core"
+	"github.com/spf13/viper"
 	"time"
+	"xorm.io/xorm"
 )
 
 // ErrRetry indicates that the event handling should be retried
@@ -19,6 +23,35 @@ type Event struct {
 	Data      map[string]interface{} `json:"data" xorm:"text"`
 	Timestamp time.Time              `json:"timestamp" xorm:"uptime bigint notnull index"`
 	Processed bool                   `json:"processed" xorm:"bool"`
+}
+
+func (e *Event) TableName() string {
+	return "idig_events"
+}
+
+const defaultProvider = "database"
+
+var eventProvider = defaultProvider
+
+func InitEventTable(engine *xorm.Engine) error {
+	return engine.Sync2(new(Event))
+}
+
+func reloadEventConfig() error {
+	eventProvider = viper.GetString("event.provider")
+	if eventProvider == "" {
+		eventProvider = defaultProvider
+	}
+	return nil
+}
+
+func init() {
+	viper.SetDefault("event.provider", eventProvider)
+	config.RegisterReloadConfigFunc(reloadEventConfig)
+	reloadEventConfig()
+	if eventProvider == defaultProvider {
+		core.RegisterInitTableFunction(InitEventTable)
+	}
 }
 
 // NewEvent creates a new event with the given parameters and sets the timestamp

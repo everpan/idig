@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/everpan/idig/pkg/config"
 	"github.com/everpan/idig/pkg/core"
+	_ "github.com/everpan/idig/pkg/event"
 	_ "github.com/everpan/idig/pkg/handler"
 	"github.com/spf13/viper"
 )

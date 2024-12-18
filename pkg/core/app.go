@@ -8,8 +8,9 @@ import (
 
 func CreateApp() *fiber.App {
 	app := fiber.New()
-	logger := GetLogger()
-	app.Use(fiberzap.New(fiberzap.Config{Logger: logger}))
+	app.Use(fiberzap.New(fiberzap.Config{
+		Logger: logger,
+	}))
 	Use(app)
 	// logger.Info("main", zap.Any("routes", app.GetRoutes()))
 	for _, r := range app.GetRoutes() {
