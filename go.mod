@@ -3,7 +3,7 @@ module github.com/everpan/idig
 go 1.23.3
 
 require (
-	github.com/IBM/sarama v1.43.3
+	github.com/IBM/sarama v1.44.0
 	github.com/apache/rocketmq-client-go/v2 v2.1.2
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/goccy/go-json v0.10.4
@@ -43,7 +43,7 @@ require (
 	github.com/tidwall/pretty v1.2.1 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	golang.org/x/crypto v0.31.0 // indirect
-	golang.org/x/net v0.32.0 // indirect
+	golang.org/x/net v0.33.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	stathat.com/c/consistent v1.0.0 // indirect
 )
@@ -71,7 +71,7 @@ require (
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.11.0 // indirect
-	github.com/spf13/cast v1.7.0 // indirect
+	github.com/spf13/cast v1.7.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/syndtr/goleveldb v1.0.0 // indirect
@@ -79,7 +79,7 @@ require (
 	github.com/valyala/fasthttp v1.58.0
 	github.com/valyala/tcplisten v1.0.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/exp v0.0.0-20241215155358-4a5509556b9e
+	golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67
 	golang.org/x/sys v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect

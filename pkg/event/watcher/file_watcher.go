@@ -41,7 +41,7 @@ func (fw *FileWatcher) handleEvents() {
 			if !ok {
 				return
 			}
-			if ev.Op&fsnotify.Write == fsnotify.Write {
+			if ev.Op.Has(fsnotify.Write) {
 				// Trigger an event when the file is written to
 				fw.bus.Publish(context.Background(), "file.write", &event.Event{
 					Type:      "file.write",

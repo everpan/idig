@@ -1,8 +1,9 @@
 package core
 
 import (
-	"github.com/gofiber/fiber/v2"
 	"sync"
+
+	"github.com/gofiber/fiber/v2"
 	"xorm.io/xorm"
 )
 
@@ -13,7 +14,7 @@ type Context struct {
 }
 
 var (
-	ctxPool = sync.Pool{New: func() interface{} { return &Context{} }}
+	ctxPool = sync.Pool{New: func() any { return &Context{} }}
 )
 
 type IDigRoute struct {
